@@ -1,0 +1,68 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'quantizedmeshdump'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=quantizedmeshdump"
+                ],
+                "filter": {
+                    "name": "quantizedmeshdump",
+                    "kind": "lib"
+                }
+            },
+            "args": [
+                "${workspaceFolder}/75953.terrain"
+            ],            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'quantizedmeshdump'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=quantizedmeshdump",
+                    "--package=quantizedmeshdump"
+                ],
+                "filter": {
+                    "name": "quantizedmeshdump",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "${workspaceFolder}/75953.terrain"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'quantizedmeshdump'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=quantizedmeshdump",
+                    "--package=quantizedmeshdump"
+                ],
+                "filter": {
+                    "name": "quantizedmeshdump",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "${workspaceFolder}/75953.terrain"
+            ],           
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
+
+
