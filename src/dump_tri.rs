@@ -32,7 +32,7 @@ fn main() -> Result<()> {
             )
         })?;
 
-    // Process extensions
+    // Process extensions - TODO
     for ext in &qm.extensions {
         println!(" - {:?}", ext.extensionId);
         if ext.extensionId == 4 {
