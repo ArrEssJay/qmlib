@@ -104,22 +104,10 @@ pub fn calculate_enu_to_ecef_rotation_matrix(
     let north = up.cross(&east).normalize();
 
     Matrix4::new(
-        east.x,
-        north.x,
-        up.x,
-        0.0,
-        east.y,
-        north.y,
-        up.y,
-        0.0,
-        east.z,
-        north.z,
-        up.z,
-        0.0,
-        ecef_position.x,
-        ecef_position.y,
-        ecef_position.z,
-        1.0,
+        east.x,north.x,up.x,0.0,
+        east.y,north.y,up.y,0.0,
+        east.z,north.z,up.z,0.0,
+        ecef_position.x,ecef_position.y,ecef_position.z,1.0,
     )
 }
 
