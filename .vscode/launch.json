@@ -4,65 +4,58 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'quantizedmeshdump'",
+            "name": "Debug unit tests in library 'qmlib'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=quantizedmeshdump"
+                    "--package=qmlib"
                 ],
                 "filter": {
-                    "name": "quantizedmeshdump",
+                    "name": "qmlib",
                     "kind": "lib"
                 }
             },
-            "args": [
-                "${workspaceFolder}/75953.terrain"
-            ],            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'quantizedmeshdump'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=quantizedmeshdump",
-                    "--package=quantizedmeshdump"
-                ],
-                "filter": {
-                    "name": "quantizedmeshdump",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "${workspaceFolder}/75953.terrain"
-            ],
+            "args": [],
             "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'quantizedmeshdump'",
+            "name": "Debug executable 'dump_tri'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=dump_tri",
+                    "--package=qmlib"
+                ],
+                "filter": {
+                    "name": "dump_tri",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'dump_tri'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=quantizedmeshdump",
-                    "--package=quantizedmeshdump"
+                    "--bin=dump_tri",
+                    "--package=qmlib"
                 ],
                 "filter": {
-                    "name": "quantizedmeshdump",
+                    "name": "dump_tri",
                     "kind": "bin"
                 }
             },
-            "args": [
-                "${workspaceFolder}/75953.terrain"
-            ],           
+            "args": [],
             "cwd": "${workspaceFolder}"
         }
     ]
 }
-
-
