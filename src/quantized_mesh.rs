@@ -58,44 +58,39 @@ impl BoundingBox {
 /// Convert Cartesian ECEF coordinates to geodetic coordinates
 /// Rey-Jer You non-iterative method
 pub fn ecef_to_geodetic(p: &Point3<f64>, el: &Ellipsoid) -> GeodeticPoint3 {
+    let major = el.semi_major_axis;
+    let minor = el.semi_minor_axis();
 
-    let major =  el.semi_major_axis;
-    let minor =  el.semi_minor_axis();
+    let r = (p.x * p.x + p.y * p.y + p.z * p.z).sqrt();
+    let e = (major * major - minor * minor).sqrt();
+    let var = r * r - e * e;
+    let u = (0.5 * var + 0.5 * (var * var + 4.0 * e * e * p.z * p.z).sqrt()).sqrt();
 
+    let q = (p.x * p.x + p.y * p.y).sqrt();
+    let hu_e = (u * u + e * e).sqrt();
+    let mut beta = (hu_e / u * p.z / q).atan();
 
-    let r = (p.x*p.x+p.y*p.y+p.z*p.z).sqrt();
-    let e = (major*major-minor*minor).sqrt();
-    let var = r*r-e*e;
-    let u = (0.5*var+0.5*(var*var+4.0*e*e*p.z*p.z).sqrt()).sqrt();
-
-    let q = (p.x*p.x+p.y*p.y).sqrt();
-    let hu_e = (u*u+e*e).sqrt();
-    let mut beta = (hu_e/u * p.z/q).atan();
-
-    let eps =  ((minor * u - major * hu_e + e*e)*beta.sin())/
-                    (major * hu_e/beta.cos() - e*e*beta.cos());
+    let eps = ((minor * u - major * hu_e + e * e) * beta.sin())
+        / (major * hu_e / beta.cos() - e * e * beta.cos());
     beta += eps;
 
-    let lat = (major/minor*beta.tan()).atan();
+    let lat = (major / minor * beta.tan()).atan();
     let lon = p.y.atan2(p.x);
 
     let v1 = p.z - minor * beta.sin();
-    let v2 = q - major*beta.cos();
+    let v2 = q - major * beta.cos();
     let alt;
 
-    let inside = (p.x*p.x/major/major)+(p.y*p.y/major/major)+(p.z*p.z/minor/minor)<1.0;
+    let inside =
+        (p.x * p.x / major / major) + (p.y * p.y / major / major) + (p.z * p.z / minor / minor)
+            < 1.0;
     if inside {
-        alt = -(v1*v1+v2*v2).sqrt();
-    }else {
-        alt = (v1*v1+v2*v2).sqrt();
+        alt = -(v1 * v1 + v2 * v2).sqrt();
+    } else {
+        alt = (v1 * v1 + v2 * v2).sqrt();
     };
-   
 
-    GeodeticPoint3 {
-        lat,
-        lon,
-        alt,
-    }
+    GeodeticPoint3 { lat, lon, alt }
 }
 
 /// Calculate the ENU to ECEF rotation matrix for a given ECEF reference point
@@ -109,10 +104,22 @@ pub fn calculate_enu_to_ecef_rotation_matrix(
     let north = up.cross(&east).normalize();
 
     Matrix4::new(
-        east.x,north.x,up.x,0.0,
-        east.y,north.y,up.y,0.0,
-        east.z,north.z,up.z,0.0,
-        ecef_position.x,ecef_position.y,ecef_position.z,1.0,
+        east.x,
+        north.x,
+        up.x,
+        0.0,
+        east.y,
+        north.y,
+        up.y,
+        0.0,
+        east.z,
+        north.z,
+        up.z,
+        0.0,
+        ecef_position.x,
+        ecef_position.y,
+        ecef_position.z,
+        1.0,
     )
 }
 
