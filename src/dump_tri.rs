@@ -2,6 +2,7 @@ use binrw::{
     io::{Error, ErrorKind, Result},
     BinRead,
 };
+use quantized_mesh::ToDegrees;
 use core::str;
 use std::fs::File;
 use std::path::PathBuf;
@@ -50,10 +51,13 @@ fn main() -> Result<()> {
         bbox.dimensions()
     );
 
-    // Print center of tile in lat/lon
+
+    // Print center of tile in ecef and lat/lon
+    println!("Tile Centre (Geocentric): {:#?}", qm.header.center);
+
     let centre_geodetic =
         quantized_mesh::ecef_to_geodetic(&qm.header.center, &quantized_mesh::Ellipsoid::wgs84());
-    println!("Tile Centre (Geodetic): {:#?}", centre_geodetic);
+    println!("Tile Centre (Geodetic): {:#?}", centre_geodetic.to_degrees());
 
     // Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
     let to_enu_matrix = quantized_mesh::calculate_enu_to_ecef_rotation_matrix(
