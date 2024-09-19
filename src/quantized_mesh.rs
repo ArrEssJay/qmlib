@@ -56,58 +56,72 @@ impl BoundingBox {
 }
 
 /// Convert Cartesian ECEF coordinates to geodetic coordinates
+pub fn ecef_to_geodetic(p: &Point3<f64>, el: &Ellipsoid) -> GeodeticPoint3 {
+    let major = el.semi_major_axis;
+    let minor = el.semi_minor_axis();
 
+    let r = (p.x * p.x + p.y * p.y + p.z * p.z).sqrt();
+    let e = (major * major - minor * minor).sqrt();
+    let var = r * r - e * e;
+    let u = (0.5 * var + 0.5 * (var * var + 4.0 * e * e * p.z * p.z).sqrt()).sqrt();
 
-    /// Convert Cartesian ECEF coordinates to geodetic coordinates
-    pub fn ecef_to_geodetic(p: &Point3<f64>, el: &Ellipsoid) -> GeodeticPoint3 {
-        let major = el.semi_major_axis;
-        let minor = el.semi_minor_axis();
+    let q = (p.x * p.x + p.y * p.y).sqrt();
+    let mut beta = (u * u + e * e).sqrt() / u * p.z / q.atan();
 
-        let r = (p.x * p.x + p.y * p.y + p.z * p.z).sqrt();
-        let e = (major * major - minor * minor).sqrt();
-        let var = r * r - e * e;
-        let u = (0.5 * var + 0.5 * (var * var + 4.0 * e * e * p.z * p.z).sqrt()).sqrt();
+    let eps = ((minor * u - major * beta.sqrt() + e * e) * beta.sin())
+        / (major * beta.sqrt() / beta.cos() - e * e * beta.cos());
+    beta += eps;
 
-        let q = (p.x * p.x + p.y * p.y).sqrt();
-        let mut beta = (u * u + e * e).sqrt() / u * p.z / q.atan();
+    let lat = (major / minor * beta.tan()).atan();
+    let lon = p.y.atan2(p.x);
+    let v1 = p.z - minor * beta.sin();
+    let v2 = q - major * beta.cos();
 
-        let eps = ((minor * u - major * beta.sqrt() + e * e) * beta.sin())
-            / (major * beta.sqrt() / beta.cos() - e * e * beta.cos());
-        beta += eps;
-
-        let lat = (major / minor * beta.tan()).atan();
-        let lon = p.y.atan2(p.x);
-        let v1 = p.z - minor * beta.sin();
-        let v2 = q - major * beta.cos();
-
-        let alt = if (p.x * p.x / major / major) + (p.y * p.y / major / major) + (p.z * p.z / minor / minor) < 1.0 {
+    let alt =
+        if (p.x * p.x / major / major) + (p.y * p.y / major / major) + (p.z * p.z / minor / minor)
+            < 1.0
+        {
             -(v1 * v1 + v2 * v2).sqrt()
         } else {
             (v1 * v1 + v2 * v2).sqrt()
         };
 
-        GeodeticPoint3 {
-            lat: lat.to_degrees(),
-            lon: lon.to_degrees(),
-            alt,
-        }
+    GeodeticPoint3 {
+        lat: lat.to_degrees(),
+        lon: lon.to_degrees(),
+        alt,
     }
+}
 
-    /// Calculate the ENU to ECEF transformation matrix for a given ECEF reference point
-    pub fn calculate_enu_to_ecef_rotation_matrix(ecef_position: Point3<f64>, ellipsoid: &Ellipsoid) -> Matrix4<f64> {
-        let up = ellipsoid.geodetic_surface_normal(ecef_position);
-        let mut east = Vector3::new(-ecef_position.y, ecef_position.x, 0.0);
-        east.normalize_mut();
-        let north = up.cross(&east).normalize();
+/// Calculate the ENU to ECEF transformation matrix for a given ECEF reference point
+pub fn calculate_enu_to_ecef_rotation_matrix(
+    ecef_position: Point3<f64>,
+    ellipsoid: &Ellipsoid,
+) -> Matrix4<f64> {
+    let up = ellipsoid.geodetic_surface_normal(ecef_position);
+    let mut east = Vector3::new(-ecef_position.y, ecef_position.x, 0.0);
+    east.normalize_mut();
+    let north = up.cross(&east).normalize();
 
-        Matrix4::new(
-            east.x, north.x, up.x, 0.0,
-            east.y, north.y, up.y, 0.0,
-            east.z, north.z, up.z, 0.0,
-            ecef_position.x, ecef_position.y, ecef_position.z, 1.0,
-        )
-    }
-
+    Matrix4::new(
+        east.x,
+        north.x,
+        up.x,
+        0.0,
+        east.y,
+        north.y,
+        up.y,
+        0.0,
+        east.z,
+        north.z,
+        up.z,
+        0.0,
+        ecef_position.x,
+        ecef_position.y,
+        ecef_position.z,
+        1.0,
+    )
+}
 
 #[binread]
 #[derive(Debug)]

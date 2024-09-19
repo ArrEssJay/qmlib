@@ -24,12 +24,13 @@ fn main() -> Result<()> {
     let mut file = File::open(&path)?;
 
     // Read the QuantizedMesh
-    let qm: quantized_mesh::QuantizedMesh = quantized_mesh::QuantizedMesh::read(&mut file).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
-            format!("Failed to read quantized mesh: {:?}", e),
-        )
-    })?;
+    let qm: quantized_mesh::QuantizedMesh = quantized_mesh::QuantizedMesh::read(&mut file)
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to read quantized mesh: {:?}", e),
+            )
+        })?;
 
     // Process extensions
     for ext in &qm.extensions {
@@ -38,7 +39,7 @@ fn main() -> Result<()> {
             let s = str::from_utf8(&ext.extensionData)
                 .unwrap_or_else(|e| panic!("Invalid UTF-8 sequence: {}", e));
             println!("Metadata extension: \n{:?}", s);
-        }   
+        }
     }
 
     // Get bounding box
@@ -50,13 +51,16 @@ fn main() -> Result<()> {
     );
 
     // Print center of tile in lat/lon
-    let centre_geodetic = quantized_mesh::ecef_to_geodetic(&qm.header.center, &quantized_mesh::Ellipsoid::wgs84());
+    let centre_geodetic =
+        quantized_mesh::ecef_to_geodetic(&qm.header.center, &quantized_mesh::Ellipsoid::wgs84());
     println!("Tile Centre (Geodetic): {:#?}", centre_geodetic);
 
     // Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
-    let to_enu_matrix =
-        quantized_mesh::calculate_enu_to_ecef_rotation_matrix(qm.header.center, &quantized_mesh::Ellipsoid::wgs84())
-            .transpose();
+    let to_enu_matrix = quantized_mesh::calculate_enu_to_ecef_rotation_matrix(
+        qm.header.center,
+        &quantized_mesh::Ellipsoid::wgs84(),
+    )
+    .transpose();
     let dist_enu =
         to_enu_matrix.transform_vector(&(qm.header.bounding_sphere.center - qm.header.center));
     println!(
