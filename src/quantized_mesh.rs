@@ -28,7 +28,7 @@ impl Ellipsoid {
         self.semi_major_axis * (1.0 - self.flattening)
     }
 
-    /// Calculate the surface normal at the given ECEF position (normalized vector)
+    /// Calculate the surface normal vector at the given ECEF position
     pub fn geodetic_surface_normal(&self, position: Point3<f64>) -> Vector3<f64> {
         let a = self.semi_major_axis;
         let e2 = self.eccentricity_squared();
@@ -40,17 +40,16 @@ impl Ellipsoid {
     }
 }
 
-/// Define a struct to hold the rectangle's vertices
 #[derive(Debug)]
 pub struct BoundingBox {
-    lower_left: (f64, f64),  // (longitude, latitude)
-    upper_right: (f64, f64), // (longitude, latitude)
+    lower_left: (f64, f64),  
+    upper_right: (f64, f64),
 }
 
 impl BoundingBox {
     pub fn dimensions(&self) -> (f64, f64) {
-        let width = self.upper_right.0 - self.lower_left.0; // Longitude difference
-        let height = self.upper_right.1 - self.lower_left.1; // Latitude difference
+        let width = self.upper_right.0 - self.lower_left.0; 
+        let height = self.upper_right.1 - self.lower_left.1; 
         (width, height)
     }
 }
@@ -93,7 +92,7 @@ pub fn ecef_to_geodetic(p: &Point3<f64>, el: &Ellipsoid) -> GeodeticPoint3 {
     GeodeticPoint3 { lat, lon, alt }
 }
 
-/// Calculate the ENU to ECEF rotation matrix for a given ECEF reference point
+/// Calculate the 4x4 ENU to ECEF rotation matrix for a given ECEF reference point
 pub fn calculate_enu_to_ecef_rotation_matrix(
     ecef_position: Point3<f64>,
     ellipsoid: &Ellipsoid,
@@ -135,9 +134,9 @@ pub enum ExtensionID {
 
 #[derive(Debug)]
 pub struct GeodeticPoint3 {
-    lat: f64, // Assuming LatLon is a f64
-    lon: f64, // Assuming LatLon is a f64
-    alt: f64, // Assuming Meter is a f64
+    lat: f64, 
+    lon: f64,
+    alt: f64, 
 }
 
 pub trait ToDegrees {
@@ -149,13 +148,13 @@ impl ToDegrees for GeodeticPoint3 {
         GeodeticPoint3 {
             lat: self.lat.to_degrees(),
             lon: self.lon.to_degrees(),
-            alt: self.alt, // Altitude may not need conversion
+            alt: self.alt, 
         }
     }
 }
 
 pub trait ToRadians {
-    fn to_radians(self) -> f64; // Assuming Radian is represented as f64
+    fn to_radians(self) -> f64;
 }
 
 impl ToRadians for f64 {
@@ -268,9 +267,7 @@ pub struct VertexData {
     #[br(count = triangleCount * 3)]
     #[br(if(vertex_count <= 65536))]
     #[br(map = |i: Vec<u16>| {
-        // Convert Vec<u16> to Vec<u32>
         let u32_vec: Vec<u32> = i.into_iter().map(|x| x as u32).collect();
-        // Apply high_watermark_decode to Vec<u32> and wrap in Some
         Some(u32_vec.high_watermark_decode())
     })]
     pub index_data_short: Option<Vec<usize>>,
@@ -398,11 +395,8 @@ impl QuantizedMesh {
         ) {
             (Some(long), _) => long,
             (None, Some(short)) => short,
-            (None, None) => return None, // Both options are None
+            (None, None) => return None, 
         };
-
-        // check triangle index bounds
-        //assert!(triangle_index * 3 + 2 >= index_data.len());
 
         let triangle_vertices = [
             index_data[triangle_index * 3],
@@ -444,9 +438,9 @@ fn lerp(min_value: f64, max_value: f64, t: f64) -> f64 {
 }
 
 /// Convert WorldCRS84Quad tile to bounding box (lat/lon).
-/// Returns the bounding box (min_lon, min_lat, max_lon, max_lat).
+/// Returns a LL/UR bounding box
 pub fn tile_to_bbox_crs84(x: u32, y: u32, z: u32) -> (BoundingBox) {
-    let tiles_per_side = 2 << z; // Number of tiles along one side at this zoom level
+    let tiles_per_side = 2 << z; // 2 tiles at 0 level for WGS84
     let tile_size_deg = 360.0 / tiles_per_side as f64; // Tile size in degrees
 
     // Longitude bounds
