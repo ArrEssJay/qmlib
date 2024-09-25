@@ -2,7 +2,6 @@ use binrw::helpers::until_eof;
 use binrw::{binread, BinRead, BinResult};
 use nalgebra::{Matrix4, Point3, Vector3};
 
-
 pub mod kml_writer;
 pub mod svg_writer;
 pub mod tile;
@@ -203,20 +202,15 @@ pub fn tile_to_bbox_crs84(x: u32, y: u32, z: u32) -> BoundingBox {
 #[derive(Debug)]
 #[br(little)]
 pub struct QuantizedMeshHeader {
-    #[br(dbg)]
     #[br(parse_with = parse_point3)]
     pub center: CartesianPoint3,
 
-    #[br(dbg)]
     pub min_height: f32,
 
-    #[br(dbg)]
     pub max_height: f32,
 
-    #[br(dbg)]
     pub bounding_sphere: BoundingSphere,
 
-    #[br(dbg)]
     #[br(parse_with = parse_point3)]
     pub horizon_occlusion_point: CartesianPoint3,
 }
@@ -225,7 +219,6 @@ pub struct QuantizedMeshHeader {
 #[derive(Debug)]
 #[br(little)]
 pub struct VertexData {
-    #[br(dbg)]
     pub vertex_count: u32,
 
     #[br(count = vertex_count)]
@@ -240,7 +233,6 @@ pub struct VertexData {
     #[br(map = |i:  Vec<u16>| i.vertex_vec_decode())]
     pub height: Vec<i32>,
 
-    #[br(dbg)]
     pub triangle_count: u32,
 
     #[br(align_before = 4)]
@@ -268,7 +260,7 @@ pub struct VertexData {
 }
 
 impl VertexData {
-    fn index_data(&self) -> Option<&[usize]> {
+    pub fn index_data(&self) -> Option<&[usize]> {
         // Check if long or short index data exists
         let index_data = match (
             self.index_data_long.as_ref(),
@@ -282,25 +274,26 @@ impl VertexData {
         Some(index_data)
     }
 
-    pub fn to_geodetic(&self, bounding_box: &BoundingBox, header: &QuantizedMeshHeader) -> Vec<[f64; 3]> {
+    pub fn to_geodetic(
+        &self,
+        bounding_box: &BoundingBox,
+        header: &QuantizedMeshHeader,
+    ) -> Vec<[f64; 3]> {
         let mut geodetic_coords = Vec::with_capacity(self.vertex_count as usize);
         for i in 0..self.vertex_count as usize {
-            let lat_lon_height = self.to_geodetic_vertex(
-                i, bounding_box, 
-                header.min_height, 
-                header.max_height
-            );
+            let lat_lon_height =
+                self.to_geodetic_vertex(i, bounding_box, header.min_height, header.max_height);
             geodetic_coords.push(lat_lon_height);
         }
         geodetic_coords
     }
 
     pub fn to_geodetic_vertex(
-        &self, 
-        vertex_index: usize, 
-        bbox: &BoundingBox, 
-        min_height: f32, 
-        max_height: f32
+        &self,
+        vertex_index: usize,
+        bbox: &BoundingBox,
+        min_height: f32,
+        max_height: f32,
     ) -> [f64; 3] {
         let u_value = self.u[vertex_index] as f64;
         let v_value = self.v[vertex_index] as f64;
@@ -349,7 +342,6 @@ impl QuantizedMesh {
         ellipsoid: Ellipsoid,
         tiling_scheme: TilingScheme,
     ) -> Self {
-
         let geodetic_vertices = vertex_data.to_geodetic(&bounding_box, &header);
         QuantizedMesh {
             header,
@@ -362,56 +354,70 @@ impl QuantizedMesh {
         }
     }
 
-
     pub fn to_geodetic_vertex(&self, vertex_index: usize, bbox: &BoundingBox) -> [f64; 3] {
-        self.vertex_data
-            .to_geodetic_vertex(vertex_index, bbox, self.header.min_height, self.header.max_height)
+        self.vertex_data.to_geodetic_vertex(
+            vertex_index,
+            bbox,
+            self.header.min_height,
+            self.header.max_height,
+        )
     }
 
     pub fn to_point3(point: [f64; 3]) -> Point3<f64> {
         Point3::new(point[0], point[1], point[2])
     }
 
-        pub fn get_triangle(
-            &self,
-            triangle_index: usize,
-            use_geodetic: bool,
-        ) -> Option<[Point3<f64>; 3]> {
-            let index_data = self.vertex_data.index_data()?;
-    
-            let triangle_vertices = [
-                index_data[triangle_index * 3],
-                index_data[triangle_index * 3 + 1],
-                index_data[triangle_index * 3 + 2],
-            ];
-    
-            // Check vertex index bounds
-            if triangle_vertices
-                .iter()
-                .any(|&x| x >= self.vertex_data.vertex_count as usize)
-            {
-                return None; // Out of bounds
-            }
-    
-            // Use geodetic or raw UV based on the flag
-            let triangle: [Point3<f64>; 3] = if use_geodetic {
-                [
-                    Self::to_point3(self.geodetic_vertices[triangle_vertices[0]]),
-                    Self::to_point3(self.geodetic_vertices[triangle_vertices[1]]),
-                    Self::to_point3(self.geodetic_vertices[triangle_vertices[2]]),
-                ]
-            } else {
-                [
-                    Point3::new(self.vertex_data.u[triangle_vertices[0]] as f64, self.vertex_data.v[triangle_vertices[0]] as f64, self.vertex_data.height[triangle_vertices[0]] as f64),
-                    Point3::new(self.vertex_data.u[triangle_vertices[1]] as f64, self.vertex_data.v[triangle_vertices[1]] as f64, self.vertex_data.height[triangle_vertices[1]] as f64),
-                    Point3::new(self.vertex_data.u[triangle_vertices[2]] as f64, self.vertex_data.v[triangle_vertices[2]] as f64, self.vertex_data.height[triangle_vertices[2]] as f64 ),
-                ]
-            };
-    
-            Some(triangle)
-        }
-    }
+    pub fn get_triangle(
+        &self,
+        triangle_index: usize,
+        use_geodetic: bool,
+    ) -> Option<[Point3<f64>; 3]> {
+        let index_data = self.vertex_data.index_data()?;
 
+        let triangle_vertices = [
+            index_data[triangle_index * 3],
+            index_data[triangle_index * 3 + 1],
+            index_data[triangle_index * 3 + 2],
+        ];
+
+        // Check vertex index bounds
+        if triangle_vertices
+            .iter()
+            .any(|&x| x >= self.vertex_data.vertex_count as usize)
+        {
+            return None; // Out of bounds
+        }
+
+        // Use geodetic or raw UV based on the flag
+        let triangle: [Point3<f64>; 3] = if use_geodetic {
+            [
+                Self::to_point3(self.geodetic_vertices[triangle_vertices[0]]),
+                Self::to_point3(self.geodetic_vertices[triangle_vertices[1]]),
+                Self::to_point3(self.geodetic_vertices[triangle_vertices[2]]),
+            ]
+        } else {
+            [
+                Point3::new(
+                    self.vertex_data.u[triangle_vertices[0]] as f64,
+                    self.vertex_data.v[triangle_vertices[0]] as f64,
+                    self.vertex_data.height[triangle_vertices[0]] as f64,
+                ),
+                Point3::new(
+                    self.vertex_data.u[triangle_vertices[1]] as f64,
+                    self.vertex_data.v[triangle_vertices[1]] as f64,
+                    self.vertex_data.height[triangle_vertices[1]] as f64,
+                ),
+                Point3::new(
+                    self.vertex_data.u[triangle_vertices[2]] as f64,
+                    self.vertex_data.v[triangle_vertices[2]] as f64,
+                    self.vertex_data.height[triangle_vertices[2]] as f64,
+                ),
+            ]
+        };
+
+        Some(triangle)
+    }
+}
 
 pub trait EdgeIndices {}
 
@@ -424,25 +430,24 @@ impl EdgeIndices for EdgeIndicesLong {}
 #[br(little)]
 #[derive(Default)]
 pub struct EdgeIndicesShort {
-    #[br(dbg)]
     pub west_vertex_count: u32,
+
     #[br(count = west_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
     pub west_indices: Vec<u32>,
 
-    #[br(dbg)]
     pub south_vertex_count: u32,
+
     #[br(count = south_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
     pub south_indices: Vec<u32>,
 
-    #[br(dbg)]
     pub east_vertex_count: u32,
+
     #[br(count = east_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
     pub east_indices: Vec<u32>,
 
-    #[br(dbg)]
     pub north_vertex_count: u32,
     #[br(count = north_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
@@ -454,23 +459,23 @@ pub struct EdgeIndicesShort {
 #[br(little)]
 #[derive(Default)]
 pub struct EdgeIndicesLong {
-    #[br(dbg)]
     pub west_vertex_count: u32,
+
     #[br(count = west_vertex_count)]
     pub west_indices: Vec<u32>,
 
-    #[br(dbg)]
     pub south_vertex_count: u32,
+
     #[br(count = south_vertex_count)]
     pub south_indices: Vec<u32>,
 
-    #[br(dbg)]
     pub east_vertex_count: u32,
+
     #[br(count = east_vertex_count)]
     pub east_indices: Vec<u32>,
 
-    #[br(dbg)]
     pub north_vertex_count: u32,
+
     #[br(count = north_vertex_count)]
     pub north_indices: Vec<u32>,
 }
@@ -490,9 +495,8 @@ pub enum ExtensionID {
 #[br(little)]
 
 pub struct Extension {
-    #[br(dbg)]
     pub extension_id: u8,
-    #[br(dbg)]
+
     pub extension_length: u32, // bytes
 
     #[br(count = extension_length)]
@@ -519,7 +523,7 @@ impl HighWatermarkDecode for Vec<u32> {
 }
 
 pub fn zigzag_decode(n: i32) -> i32 {
-    ((n >> 1) ) ^ (-((n & 1) ))
+    (n >> 1) ^ (-(n & 1))
 }
 
 trait VertexVecDecode {
@@ -533,7 +537,6 @@ impl VertexVecDecode for Vec<u16> {
         for &i in self.iter() {
             let n = i as i32;
             val += zigzag_decode(n);
-            //res.push(((n >> 1) ) ^ (-((n & 1) )));
             res.push(val);
         }
         res
