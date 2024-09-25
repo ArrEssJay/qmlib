@@ -1,5 +1,6 @@
+use binrw::{prelude::*, BinRead, BinResult};
 use binrw::helpers::until_eof;
-use binrw::{binread, BinRead, BinResult};
+use binrw::binread;
 use nalgebra::{Matrix4, Point3, Vector3};
 
 pub mod kml_writer;
@@ -250,13 +251,11 @@ pub struct VertexData {
     })]
     pub index_data_short: Option<Vec<usize>>,
 
-    #[br(align_before = 4)]
-    #[br(if(vertex_count > 65536) )]
-    pub edge_indices_long: Option<EdgeIndicesLong>,
-
-    #[br(align_before = 2)]
-    #[br(if(vertex_count <= 65536) )]
-    pub edge_indices_short: Option<EdgeIndicesShort>,
+    #[br(align_before = if vertex_count > 65536 { 4 } else { 2 })]
+        #[br(args {
+        long: vertex_count > 65536
+    })]
+    pub edge_indices: EdgeIndices,
 }
 
 impl VertexData {
@@ -419,64 +418,36 @@ impl QuantizedMesh {
     }
 }
 
-pub trait EdgeIndices {}
 
-impl EdgeIndices for EdgeIndicesShort {}
 
-impl EdgeIndices for EdgeIndicesLong {}
-
-#[binread]
+#[binread   ]
 #[derive(Debug)]
 #[br(little)]
 #[derive(Default)]
-pub struct EdgeIndicesShort {
+#[br(import{ 
+    long: bool}
+)]
+pub struct EdgeIndices{
+    #[br(dbg)]
     pub west_vertex_count: u32,
-
-    #[br(count = west_vertex_count)]
-    #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
+    #[br(dbg)]
+    #[br(parse_with = read_u16_u32_as_u32, args(west_vertex_count as usize, long))]
     pub west_indices: Vec<u32>,
 
+    #[br(dbg)]
     pub south_vertex_count: u32,
-
-    #[br(count = south_vertex_count)]
-    #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
+    #[br(parse_with = read_u16_u32_as_u32, args(south_vertex_count as usize, long))]
     pub south_indices: Vec<u32>,
 
+    #[br(dbg)]
     pub east_vertex_count: u32,
-
-    #[br(count = east_vertex_count)]
-    #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
+    #[br(parse_with = read_u16_u32_as_u32, args(east_vertex_count as usize, long))]
     pub east_indices: Vec<u32>,
 
+    #[br(dbg)]
     pub north_vertex_count: u32,
-    #[br(count = north_vertex_count)]
-    #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
-    pub north_indices: Vec<u32>,
-}
-
-#[binread]
-#[derive(Debug)]
-#[br(little)]
-#[derive(Default)]
-pub struct EdgeIndicesLong {
-    pub west_vertex_count: u32,
-
-    #[br(count = west_vertex_count)]
-    pub west_indices: Vec<u32>,
-
-    pub south_vertex_count: u32,
-
-    #[br(count = south_vertex_count)]
-    pub south_indices: Vec<u32>,
-
-    pub east_vertex_count: u32,
-
-    #[br(count = east_vertex_count)]
-    pub east_indices: Vec<u32>,
-
-    pub north_vertex_count: u32,
-
-    #[br(count = north_vertex_count)]
+    #[br(dbg)]
+    #[br(parse_with = read_u16_u32_as_u32, args(east_vertex_count as usize, long))]
     pub north_indices: Vec<u32>,
 }
 
@@ -550,4 +521,31 @@ fn parse_point3() -> BinResult<Point3<f64>> {
         <_>::read_options(reader, endian, ())?,
         <_>::read_options(reader, endian, ())?,
     ))
+}
+
+// #[binrw::parser(reader, endian)]
+// pub fn read_u16_as_u32() -> binrw::BinResult<u32> {
+//     let val = u16::read_options(reader, endian, ())?;
+//     println!("Read u16 bytes: {:?}", val);
+//     Ok(val as u32) // Converts u16 to u32
+// }
+
+
+#[binrw::parser(reader,endian)]
+pub fn read_u16_u32_as_u32(count: usize, long: bool) -> binrw::BinResult<Vec<u32>> {
+    let mut result = Vec::with_capacity(count);
+    
+    // Read 'count' number of u16 values and convert to u32
+    for _ in 0..count {
+        if long {
+            let val = u32::read_options(reader, endian, ())?;
+            result.push(val);
+        }
+        else {
+            let val = u16::read_options(reader, endian, ())?;
+            result.push(val as u32);
+        }
+    }
+    
+    Ok(result)
 }

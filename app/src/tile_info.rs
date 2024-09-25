@@ -83,55 +83,33 @@ fn main() -> Result<(), String> {
             );
 
             println!(
-                "\nLong Edge Index: {:#?}",
-                tile.quantized_mesh.vertex_data.edge_indices_long.is_some()
+                "East Edge Vertex Count: {:?}",
+                tile.quantized_mesh
+                    .vertex_data
+                    .edge_indices
+                    .east_vertex_count
             );
             println!(
-                "Short Edge Index: {:#?}",
-                tile.quantized_mesh.vertex_data.edge_indices_short.is_some()
+                "West Edge Vertex Count: {:?}",
+                tile.quantized_mesh
+                    .vertex_data
+                    .edge_indices
+                    .west_vertex_count
             );
-
-            if let Some(edge_indices_long) = &tile.quantized_mesh.vertex_data.edge_indices_long {
-                // Now you can use edge_indices_long safely
-                // For example:
-                println!(
-                    "East Edge Vertex Count: {:?}",
-                    edge_indices_long.east_vertex_count
-                );
-                println!(
-                    "West Edge Vertex Count: {:?}",
-                    edge_indices_long.west_vertex_count
-                );
-                println!(
-                    "North Edge Vertex Count: {:?}",
-                    edge_indices_long.north_vertex_count
-                );
-                println!(
-                    "South Edge Vertex Count: {:?}",
-                    edge_indices_long.south_vertex_count
-                );
-            }
-
-            if let Some(edge_indices_short) = &tile.quantized_mesh.vertex_data.edge_indices_short {
-                // Now you can use edge_indices_long safely
-                // For example:
-                println!(
-                    "East Edge Vertex Count: {:?}",
-                    edge_indices_short.east_vertex_count
-                );
-                println!(
-                    "West Edge Vertex Count: {:?}",
-                    edge_indices_short.west_vertex_count
-                );
-                println!(
-                    "North Edge Vertex Count: {:?}",
-                    edge_indices_short.north_vertex_count
-                );
-                println!(
-                    "South Edge Vertex Count: {:?}",
-                    edge_indices_short.south_vertex_count
-                );
-            }
+            println!(
+                "North Edge Vertex Count: {:?}",
+                tile.quantized_mesh
+                    .vertex_data
+                    .edge_indices
+                    .north_vertex_count
+            );
+            println!(
+                "South Edge Vertex Count: {:?}",
+                tile.quantized_mesh
+                    .vertex_data
+                    .edge_indices
+                    .south_vertex_count
+            );
 
             // Process extensions - TODO
             for ext in &tile.quantized_mesh.extensions {
