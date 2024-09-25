@@ -274,12 +274,12 @@ impl VertexData {
             self.index_data_long.as_ref(),
             self.index_data_short.as_ref(),
         ) {
-            (Some(long), _) => long.as_slice(), // Return a slice of long indices
-            (None, Some(short)) => short.as_slice(), // Return a slice of short indices
-            (None, None) => return None,        // Return None if neither exists
+            (Some(long), _) => long.as_slice(),
+            (None, Some(short)) => short.as_slice(),
+            (None, None) => return None,
         };
 
-        Some(index_data) // Return Some with the index data slice
+        Some(index_data)
     }
 
     pub fn to_geodetic(&self, bounding_box: &BoundingBox, header: &QuantizedMeshHeader) -> Vec<[f64; 3]> {
@@ -319,15 +319,15 @@ impl VertexData {
 
 #[binread]
 #[derive(Debug)]
-#[br(little)] // Import bounding_box as an argument
+#[br(little)]
 pub struct QuantizedMesh {
-    #[br(ignore)] // Ignore the parsing of this field
+    #[br(ignore)]
     pub bounding_box: BoundingBox,
 
-    #[br(ignore)] // Ignore the parsing of this field
+    #[br(ignore)]
     pub ellipsoid: Ellipsoid,
 
-    #[br(ignore)] // Ignore the parsing of this field
+    #[br(ignore)]
     pub tiling_scheme: TilingScheme,
 
     pub header: QuantizedMeshHeader,
@@ -336,8 +336,8 @@ pub struct QuantizedMesh {
     #[br(parse_with = until_eof)]
     pub extensions: Vec<Extension>,
 
-    #[br(ignore)] // We will calculate this field after parsing
-    pub geodetic_vertices: Vec<[f64; 3]>,  // New field to store georeferenced vertices
+    #[br(ignore)]
+    pub geodetic_vertices: Vec<[f64; 3]>,
 }
 
 impl QuantizedMesh {
@@ -428,7 +428,6 @@ pub struct EdgeIndicesShort {
     pub west_vertex_count: u32,
     #[br(count = west_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
-    // Map u16 to u32
     pub west_indices: Vec<u32>,
 
     #[br(dbg)]
