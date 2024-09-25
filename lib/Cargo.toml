@@ -1,0 +1,19 @@
+[package]
+name = "qmlib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+binrw = "0.14.0"
+libc = "0.2.158"
+nalgebra = "0.33.0"
+
+
+[lib]
+name = "qmlib"
+path = "src/quantized_mesh.rs"
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+# Optional: Optimize for release builds
+lto = true  # Link Time Optimization

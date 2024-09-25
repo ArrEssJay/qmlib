@@ -2,13 +2,12 @@ use binrw::helpers::until_eof;
 use binrw::{binread, BinRead, BinResult};
 use nalgebra::{Matrix4, Point3, Vector3};
 
-// Geospatial structs & functions
+/// Ellipsoids
+#[derive(Debug, Default)]
 
-/// Ellipsoid constants for WGS-84
-#[derive(Debug)]
 pub struct Ellipsoid {
-    pub semi_major_axis: f64,
-    pub flattening: f64,
+    pub semi_major_axis: f64, // Semi-major axis (equatorial radius) in meters
+    pub flattening: f64,      // Semi-minor axis (polar radius) in meters
 }
 
 impl Ellipsoid {
@@ -31,18 +30,32 @@ impl Ellipsoid {
     }
 
     /// Calculate the surface normal vector at the given ECEF position
-    pub fn geodetic_surface_normal(&self, position: Point3<f64>) -> Vector3<f64> {
-        let a = self.semi_major_axis;
-        let e2 = self.eccentricity_squared();
-        let (x, y, z) = (position.x, position.y, position.z);
-
-        let p = (x * x + y * y).sqrt();
-        let normal = Vector3::new(x / a, y / a, z / (a * (1.0 - e2).sqrt()));
+    pub fn geodetic_surface_normal(&self, p: Point3<f64>) -> Vector3<f64> {
+        let normal = Vector3::new(
+            p.x / (self.semi_major_axis * self.semi_major_axis),
+            p.y / (self.semi_major_axis * self.semi_major_axis),
+            p.z / (self.semi_minor_axis() * (self.semi_minor_axis())),
+        );
+        // Normalize the vector to get the unit normal
         normal.normalize()
     }
 }
 
-#[derive(Debug)]
+#[derive(Default)]
+pub enum Projection {
+    #[default]
+    Epsg4326 = 1,
+    Epsg3857 = 2,
+}
+
+#[derive(Debug, Default)]
+pub enum TilingScheme {
+    #[default]
+    Tms = 1,
+    Slippy = 2,
+}
+
+#[derive(Debug, Default)]
 pub struct BoundingBox {
     lower_left: (f64, f64),
     upper_right: (f64, f64),
@@ -56,12 +69,8 @@ impl BoundingBox {
     }
 }
 
-#[derive(Debug)]
-pub struct GeodeticPoint3 {
-    lat: f64,
-    lon: f64,
-    alt: f64,
-}
+pub type CartesianPoint3 = Point3<f64>;
+pub type GeodeticPoint3 = Point3<f64>;
 
 pub trait ToDegrees {
     fn to_degrees(self) -> GeodeticPoint3;
@@ -69,21 +78,17 @@ pub trait ToDegrees {
 
 impl ToDegrees for GeodeticPoint3 {
     fn to_degrees(self) -> GeodeticPoint3 {
-        GeodeticPoint3 {
-            lat: self.lat.to_degrees(),
-            lon: self.lon.to_degrees(),
-            alt: self.alt,
-        }
+        GeodeticPoint3::new(self[0].to_degrees(), self[1].to_degrees(), self[2])
     }
 }
 
 pub trait ToRadians {
-    fn to_radians(self) -> f64;
+    fn to_radians(self) -> GeodeticPoint3;
 }
 
-impl ToRadians for f64 {
-    fn to_radians(self) -> f64 {
-        self * std::f64::consts::PI / 180.0
+impl ToRadians for GeodeticPoint3 {
+    fn to_radians(self) -> GeodeticPoint3 {
+        GeodeticPoint3::new(self[0].to_radians(), self[1].to_radians(), self[2])
     }
 }
 
@@ -131,7 +136,7 @@ pub fn ecef_to_geodetic(p: &Point3<f64>, el: &Ellipsoid) -> GeodeticPoint3 {
         alt = (v1 * v1 + v2 * v2).sqrt();
     };
 
-    GeodeticPoint3 { lat, lon, alt }
+    GeodeticPoint3::new(lat, lon, alt)
 }
 
 /// Calculate the 4x4 ENU to ECEF rotation matrix for a given ECEF reference point
@@ -171,7 +176,7 @@ fn lerp(min_value: f64, max_value: f64, t: f64) -> f64 {
 
 /// Convert WorldCRS84Quad tile to bounding box (lat/lon).
 /// Returns a LL/UR bounding box
-pub fn tile_to_bbox_crs84(x: u32, y: u32, z: u32) -> (BoundingBox) {
+pub fn tile_to_bbox_crs84(x: u32, y: u32, z: u32) -> BoundingBox {
     let tiles_per_side = 2 << z; // 2 tiles at 0 level for WGS84
     let tile_size_deg = 360.0 / tiles_per_side as f64; // Tile size in degrees
 
@@ -197,7 +202,7 @@ pub fn tile_to_bbox_crs84(x: u32, y: u32, z: u32) -> (BoundingBox) {
 pub struct QuantizedMeshHeader {
     #[br(dbg)]
     #[br(parse_with = parse_point3)]
-    pub center: Point3<f64>,
+    pub center: CartesianPoint3,
 
     #[br(dbg)]
     pub min_height: f32,
@@ -210,7 +215,7 @@ pub struct QuantizedMeshHeader {
 
     #[br(dbg)]
     #[br(parse_with = parse_point3)]
-    pub horizon_occlusion_point: Point3<f64>,
+    pub horizon_occlusion_point: CartesianPoint3,
 }
 
 #[binread]
@@ -233,16 +238,16 @@ pub struct VertexData {
     pub height: Vec<i32>,
 
     #[br(dbg)]
-    pub triangleCount: u32,
+    pub triangle_count: u32,
 
     #[br(align_before = 4)]
-    #[br(count = triangleCount * 3)]
+    #[br(count = triangle_count * 3)]
     #[br(if(vertex_count > 65536) )]
     #[br(map = |i:  Vec<u32>| Some(i.high_watermark_decode()))]
     pub index_data_long: Option<Vec<usize>>,
 
     #[br(align_before = 2)]
-    #[br(count = triangleCount * 3)]
+    #[br(count = triangle_count * 3)]
     #[br(if(vertex_count <= 65536))]
     #[br(map = |i: Vec<u16>| {
         let u32_vec: Vec<u32> = i.into_iter().map(|x| x as u32).collect();
@@ -259,11 +264,35 @@ pub struct VertexData {
     pub edge_indices_short: Option<EdgeIndicesShort>,
 }
 
+impl VertexData {
+    fn index_data(&self) -> Option<&[usize]> {
+        // Check if long or short index data exists
+        let index_data = match (
+            self.index_data_long.as_ref(),
+            self.index_data_short.as_ref(),
+        ) {
+            (Some(long), _) => long.as_slice(), // Return a slice of long indices
+            (None, Some(short)) => short.as_slice(), // Return a slice of short indices
+            (None, None) => return None,        // Return None if neither exists
+        };
+
+        Some(index_data) // Return Some with the index data slice
+    }
+}
+
 #[binread]
 #[derive(Debug)]
-#[br(little)]
-
+#[br(little)] // Import bounding_box as an argument
 pub struct QuantizedMesh {
+    #[br(ignore)] // Ignore the parsing of this field
+    pub bounding_box: BoundingBox,
+
+    #[br(ignore)] // Ignore the parsing of this field
+    pub ellipsoid: Ellipsoid,
+
+    #[br(ignore)] // Ignore the parsing of this field
+    pub tiling_scheme: TilingScheme,
+
     pub header: QuantizedMeshHeader,
     pub vertex_data: VertexData,
 
@@ -272,7 +301,35 @@ pub struct QuantizedMesh {
 }
 
 impl QuantizedMesh {
-    fn get_interpolated_vertex(&self, vertex_index: usize, bbox: &BoundingBox) -> Point3<f64> {
+    pub fn new(
+        header: QuantizedMeshHeader,
+        vertex_data: VertexData,
+        extensions: Vec<Extension>,
+        bounding_box: BoundingBox,
+        ellipsoid: Ellipsoid,
+        tiling_scheme: TilingScheme,
+    ) -> Self {
+        QuantizedMesh {
+            header,
+            vertex_data,
+            extensions,
+            bounding_box,
+            ellipsoid,
+            tiling_scheme,
+        }
+    }
+
+    // local u,v,h to l,l,h
+    pub fn to_geodetic(&self, bounding_box: &BoundingBox) -> Vec<[f64; 3]> {
+        let mut geodetic_coords = Vec::with_capacity(self.vertex_data.vertex_count as usize);
+        for i in 0..self.vertex_data.vertex_count as usize {
+            let lat_lon_height = self.to_geodetic_vertex(i, bounding_box);
+            geodetic_coords.push(lat_lon_height);
+        }
+        geodetic_coords
+    }
+
+    pub fn to_geodetic_vertex(&self, vertex_index: usize, bbox: &BoundingBox) -> [f64; 3] {
         let u_value = self.vertex_data.u[vertex_index] as f64;
         let v_value = self.vertex_data.v[vertex_index] as f64;
         let height_value = self.vertex_data.height[vertex_index] as f64;
@@ -291,22 +348,19 @@ impl QuantizedMesh {
             height_value / 32767.0,
         );
 
-        Point3::new(x, y, z)
+        [x, y, z]
     }
+
+    pub fn to_point3(point: [f64; 3]) -> Point3<f64> {
+        Point3::new(point[0], point[1], point[2])
+    }
+
     pub fn get_triangle(
         &self,
         triangle_index: usize,
         bbox: &BoundingBox,
     ) -> Option<[Point3<f64>; 3]> {
-        // long or short index?
-        let index_data = match (
-            self.vertex_data.index_data_long.as_ref(),
-            self.vertex_data.index_data_short.as_ref(),
-        ) {
-            (Some(long), _) => long,
-            (None, Some(short)) => short,
-            (None, None) => return None,
-        };
+        let index_data = self.vertex_data.index_data()?;
 
         let triangle_vertices = [
             index_data[triangle_index * 3],
@@ -323,10 +377,10 @@ impl QuantizedMesh {
         }
 
         // Calculate interpolated coordinates for each vertex
-        let triangle: [nalgebra::OPoint<f64, nalgebra::Const<3>>; 3] = [
-            self.get_interpolated_vertex(triangle_vertices[0], &bbox),
-            self.get_interpolated_vertex(triangle_vertices[1], &bbox),
-            self.get_interpolated_vertex(triangle_vertices[2], &bbox),
+        let triangle: [Point3<f64>; 3] = [
+            Self::to_point3(self.to_geodetic_vertex(triangle_vertices[0], &bbox)),
+            Self::to_point3(self.to_geodetic_vertex(triangle_vertices[1], &bbox)),
+            Self::to_point3(self.to_geodetic_vertex(triangle_vertices[2], &bbox)),
         ];
 
         Some(triangle)
@@ -345,29 +399,29 @@ impl EdgeIndices for EdgeIndicesLong {}
 #[derive(Default)]
 pub struct EdgeIndicesShort {
     #[br(dbg)]
-    pub westVertexCount: u32,
-    #[br(count = westVertexCount)]
+    pub west_vertex_count: u32,
+    #[br(count = west_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
     // Map u16 to u32
-    pub westIndices: Vec<u32>,
+    pub west_indices: Vec<u32>,
 
     #[br(dbg)]
-    pub southVertexCount: u32,
-    #[br(count = southVertexCount)]
+    pub south_vertex_count: u32,
+    #[br(count = south_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
-    pub southIndices: Vec<u32>,
+    pub south_indices: Vec<u32>,
 
     #[br(dbg)]
-    pub eastVertexCount: u32,
-    #[br(count = eastVertexCount)]
+    pub east_vertex_count: u32,
+    #[br(count = east_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
-    pub eastIndices: Vec<u32>,
+    pub east_indices: Vec<u32>,
 
     #[br(dbg)]
-    pub northVertexCount: u32,
-    #[br(count = northVertexCount)]
+    pub north_vertex_count: u32,
+    #[br(count = north_vertex_count)]
     #[br(map = |vals: Vec<u16>| vals.into_iter().map(|v| v as u32).collect())]
-    pub northIndices: Vec<u32>,
+    pub north_indices: Vec<u32>,
 }
 
 #[binread]
@@ -376,24 +430,24 @@ pub struct EdgeIndicesShort {
 #[derive(Default)]
 pub struct EdgeIndicesLong {
     #[br(dbg)]
-    pub westVertexCount: u32,
-    #[br(count = westVertexCount)]
-    pub westIndices: Vec<u32>,
+    pub west_vertex_count: u32,
+    #[br(count = west_vertex_count)]
+    pub west_indices: Vec<u32>,
 
     #[br(dbg)]
-    pub southVertexCount: u32,
-    #[br(count = southVertexCount)]
-    pub southIndices: Vec<u32>,
+    pub south_vertex_count: u32,
+    #[br(count = south_vertex_count)]
+    pub south_indices: Vec<u32>,
 
     #[br(dbg)]
-    pub eastVertexCount: u32,
-    #[br(count = eastVertexCount)]
-    pub eastIndices: Vec<u32>,
+    pub east_vertex_count: u32,
+    #[br(count = east_vertex_count)]
+    pub east_indices: Vec<u32>,
 
     #[br(dbg)]
-    pub northVertexCount: u32,
-    #[br(count = northVertexCount)]
-    pub northIndices: Vec<u32>,
+    pub north_vertex_count: u32,
+    #[br(count = north_vertex_count)]
+    pub north_indices: Vec<u32>,
 }
 
 #[binread]
@@ -412,12 +466,12 @@ pub enum ExtensionID {
 
 pub struct Extension {
     #[br(dbg)]
-    pub extensionId: u8,
+    pub extension_id: u8,
     #[br(dbg)]
-    pub extensionLength: u32, // bytes
+    pub extension_length: u32, // bytes
 
-    #[br(count = extensionLength)]
-    pub extensionData: Vec<u8>,
+    #[br(count = extension_length)]
+    pub extension_data: Vec<u8>,
 }
 
 trait HighWatermarkDecode {
@@ -430,8 +484,7 @@ impl HighWatermarkDecode for Vec<u32> {
         let mut highest: usize = 0;
 
         for &i in self.iter() {
-            let i_as_usize = i as usize;
-            decoded.push(highest - i_as_usize);
+            decoded.push(highest - (i as usize));
             if i == 0 {
                 highest += 1;
             }
@@ -443,16 +496,11 @@ impl HighWatermarkDecode for Vec<u32> {
 trait ZigZagDecode {
     fn vec_zigzag_decode(&self) -> Vec<i32>;
 }
-
 impl ZigZagDecode for Vec<u16> {
     fn vec_zigzag_decode(&self) -> Vec<i32> {
         let mut res: Vec<i32> = Vec::with_capacity(self.len());
-        let mut n: i32 = 0;
-        for i in self.iter() {
-            let j: i32 = *i as i32;
-            // zigzag decode
-            n += (j >> 1) ^ (-(j & 1));
-            res.push(n);
+        for &n in self.iter() {
+            res.push(((n >> 1) as i32) ^ (-((n & 1) as i32)));
         }
         res
     }

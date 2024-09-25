@@ -1,17 +1,5 @@
-[package]
-name = "qmlib"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-binrw = "0.14.0"
-nalgebra = "0.33.0"
-
-[[bin]]
-name = "dump_tri"
-path = "src/dump_tri.rs"
-
-[lib]
-name = "qmlib"
-path = "src/quantized_mesh.rs"
-crate-type = ["cdylib", "rlib"]
+[workspace]
+members = [
+    "app",
+    "lib"
+]
