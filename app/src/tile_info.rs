@@ -1,92 +1,75 @@
-use binrw::{
-    io::{Error, ErrorKind, Result},
-    BinRead,
-};
 use core::str;
-use qmlib::{Ellipsoid, GeodeticPoint3, QuantizedMesh, ToDegrees};
-use std::fs::File;
+use qmlib::{tile, GeodeticPoint3, ToDegrees};
 use std::path::PathBuf;
+use std::env;
+use std::result::Result; // Add this import to use Result
 
-fn main() -> Result<()> {
-    // Parameters for the file path
-    let zoom = 18;
-    let x = 470053;
-    let y = 77832;
-    let bounding_box = qmlib::tile_to_bbox_crs84(x, y, zoom);
-    let ellipsoid: qmlib::Ellipsoid = Ellipsoid::wgs84();
-    let tiling_scheme = qmlib::TilingScheme::Slippy;
+fn main() -> Result<(), String> { // Update Result to specify the error type
+    // Get the path from command line arguments
+    let args: Vec<String> = env::args().collect();
 
-    // Construct the file path
-    let mut path = PathBuf::from("./test/data/a");
-    path.push(zoom.to_string());
-    path.push(x.to_string());
-    path.push(format!("{}.terrain", y));
-    println!("File: {:?}", path);
+    if args.len() < 2 {
+        eprintln!("Usage: {} <path>", args[0]);
+        std::process::exit(1);
+    }
 
-    // Open the file
-    let mut file = File::open(&path)?;
+    let pathstr = &args[1];
+    let path: PathBuf = PathBuf::from(pathstr);
 
-    // Read the QuantizedMesh
-    let qmdata: QuantizedMesh = QuantizedMesh::read_le(&mut file).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
-            format!("Failed to read quantized mesh: {:?}", e),
-        )
-    })?;
+    // Decode zoom, x, y from the file path
+    match tile::load_quantized_mesh(&path) {
+        Ok(tile) => {
+            // Get bounding box
+            println!("Tile Bounding Rectangle: {:#?}", tile.quantized_mesh.bounding_box);
+            println!(
+                "Tile Bounding Rectangle Dimensions: {:#?}",
+                tile.quantized_mesh.bounding_box.dimensions()
+            );
 
-    let qm = QuantizedMesh::new(
-        qmdata.header,
-        qmdata.vertex_data,
-        qmdata.extensions,
-        bounding_box,
-        ellipsoid,
-        tiling_scheme,
-    );
+            // Process extensions - TODO
+            for ext in &tile.quantized_mesh.extensions {
+                println!(" - {:?}", ext.extension_id);
+                if ext.extension_id == 4 {
+                    let s = str::from_utf8(&ext.extension_data)
+                        .unwrap_or_else(|e| panic!("Invalid UTF-8 sequence: {}", e));
+                    println!("Metadata extension: \n{:?}", s);
+                }
+            }
+            // Print center of tile in ecef and lat/lon
+            println!("Tile Centre (Geocentric): {:#?}", tile.quantized_mesh.header.center);
 
-    // Get bounding box
-    println!("Tile Bounding Rectangle: {:#?}", qm.bounding_box);
-    println!(
-        "Tile Bounding Rectangle Dimensions: {:#?}",
-        qm.bounding_box.dimensions()
-    );
+            let centre_geodetic: GeodeticPoint3 =
+                qmlib::ecef_to_geodetic(&tile.quantized_mesh.header.center, &tile.quantized_mesh.ellipsoid);
+            println!(
+                "Tile Centre (Geodetic): {:#?}",
+                centre_geodetic.to_degrees()
+            );
 
-    // Process extensions - TODO
-    for ext in &qm.extensions {
-        println!(" - {:?}", ext.extension_id);
-        if ext.extension_id == 4 {
-            let s = str::from_utf8(&ext.extension_data)
-                .unwrap_or_else(|e| panic!("Invalid UTF-8 sequence: {}", e));
-            println!("Metadata extension: \n{:?}", s);
+            // Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
+            let to_enu_matrix =
+                qmlib::calculate_enu_to_ecef_rotation_matrix(tile.quantized_mesh.header.center, &tile.quantized_mesh.ellipsoid)
+                    .transpose();
+            let dist_enu = to_enu_matrix
+                .transform_vector(&(tile.quantized_mesh.header.bounding_sphere.center - tile.quantized_mesh.header.center));
+            println!(
+                "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",
+                dist_enu
+            );
+
+            // Print the first triangle
+            println!("0: {:#?}", tile.quantized_mesh.get_triangle(0, true));
+
+            // Print the first triangle
+            println!("Vertices: {:#?}", tile.quantized_mesh.geodetic_vertices);
+
+            println!("Vertices u: {:#?}", tile.quantized_mesh.vertex_data.u);
+            println!("Vertices v: {:#?}", tile.quantized_mesh.vertex_data.v);
+            println!("Vertices h: {:#?}", tile.quantized_mesh.vertex_data.height);
+        }
+        Err(err) => {
+            eprintln!("Error: {}", err);
         }
     }
-    // Print center of tile in ecef and lat/lon
-    println!("Tile Centre (Geocentric): {:#?}", qm.header.center);
-
-    let centre_geodetic: GeodeticPoint3 = qmlib::ecef_to_geodetic(&qm.header.center, &qm.ellipsoid);
-    println!(
-        "Tile Centre (Geodetic): {:#?}",
-        centre_geodetic.to_degrees()
-    );
-
-    // Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
-    let to_enu_matrix =
-        qmlib::calculate_enu_to_ecef_rotation_matrix(qm.header.center, &qm.ellipsoid).transpose();
-    let dist_enu =
-        to_enu_matrix.transform_vector(&(qm.header.bounding_sphere.center - qm.header.center));
-    println!(
-        "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",
-        dist_enu
-    );
-
-    // Print the first triangle
-    println!("0: {:#?}", qm.get_triangle(0, true));
-
-    // Print the first triangle
-    println!("Vertices: {:#?}", qm.geodetic_vertices);
-
-    println!("Vertices u: {:#?}", qm.vertex_data.u);
-    println!("Vertices v: {:#?}", qm.vertex_data.v);
-    println!("Vertices h: {:#?}", qm.vertex_data.height);
 
     Ok(())
 }

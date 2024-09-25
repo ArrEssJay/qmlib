@@ -1,72 +1,30 @@
-use binrw::{
-    io::{Error, ErrorKind, Result},
-    BinRead,
-};
-use qmlib::{Ellipsoid, QuantizedMesh};
-use std::fs::File;
+use qmlib::{tile, kml_writer, svg_writer};
 use std::path::PathBuf;
+use std::env;
+use std::result::Result; // Use standard Result
 
+fn main() -> Result<(), String> {
+    // Get the path from command line arguments
+    let args: Vec<String> = env::args().collect();
 
-use qmlib::kml_writer;
-use qmlib::svg_writer;
-
-fn main() -> Result<()> {
-    // Parameters for the file path
-    let zoom = 18;
-    let x = 470053;
-    let y = 77832;
-    let bounding_box = qmlib::tile_to_bbox_crs84(x, y, zoom);
-    let ellipsoid: qmlib::Ellipsoid = Ellipsoid::wgs84();
-    let tiling_scheme = qmlib::TilingScheme::Slippy;
-
-    let pathstr = "./test/data/a";
-    // Construct the file path
-    let mut path: PathBuf = PathBuf::from(pathstr);
-    path.push(zoom.to_string());
-    path.push(x.to_string());
-    path.push(format!("{}.terrain", y));
-    println!("File: {:?}", path);
-
-    // Open the file
-    let mut file = File::open(&path)?;
-
-    // Read the QuantizedMesh
-    let qmdata: QuantizedMesh = QuantizedMesh::read_le(&mut file).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
-            format!("Failed to read quantized mesh: {:?}", e),
-        )
-    })?;
-
-    let qm = QuantizedMesh::new(
-        qmdata.header,
-        qmdata.vertex_data,
-        qmdata.extensions,
-        bounding_box,
-        ellipsoid,
-        tiling_scheme,
-    );
-
-    let kml_filename = format!("{}.kml", y);
-    let mut outpath: PathBuf = PathBuf::from("./test/data/a");
-
-    outpath.push(&kml_filename);
-    if let Err(e) = kml_writer::export_to_kml(&qm, &outpath) {
-        eprintln!("Error exporting to KML: {}", e);
-    } else {
-        println!("KML exported successfully to {}", &kml_filename);
+    if args.len() < 2 {
+        return Err(format!("Usage: {} <path>", args[0]));
     }
 
+    let pathstr = &args[1];
+    let path: PathBuf = PathBuf::from(pathstr);
 
-    let svg_filename = format!("{}.svg", y);
-    let mut outpath: PathBuf = PathBuf::from("./test/data/a");
+    // Load the QuantizedMesh
+    let tile = tile::load_quantized_mesh(&path)?;
 
-    outpath.push(&svg_filename);
-    if let Err(e) = svg_writer::export_to_svg(&qm, &outpath) {
-        eprintln!("Error exporting to SVG: {}", e);
-    } else {
-        println!("SVG exported successfully to {}", &svg_filename);
-    }
+    // Export to KML
+    let mut outpath = path.clone();
+    
+    outpath.set_extension("kml");
+    kml_writer::export_to_kml(&tile.quantized_mesh, &outpath).map_err(|e| format!("Error exporting to KML: {}", e))?;
+
+    outpath.set_extension("svg");
+    svg_writer::export_to_svg(&tile.quantized_mesh, &outpath).map_err(|e| format!("Error exporting to SVG: {}", e))?;
 
     Ok(())
 }

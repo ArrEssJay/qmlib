@@ -5,7 +5,7 @@ use nalgebra::{Matrix4, Point3, Vector3};
 
 pub mod kml_writer;
 pub mod svg_writer;
-
+pub mod tile;
 /// Ellipsoids
 #[derive(Debug, Default)]
 pub struct Ellipsoid {
