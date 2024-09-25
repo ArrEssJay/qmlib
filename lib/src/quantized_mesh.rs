@@ -2,9 +2,12 @@ use binrw::helpers::until_eof;
 use binrw::{binread, BinRead, BinResult};
 use nalgebra::{Matrix4, Point3, Vector3};
 
+
+pub mod kml_writer;
+pub mod svg_writer;
+
 /// Ellipsoids
 #[derive(Debug, Default)]
-
 pub struct Ellipsoid {
     pub semi_major_axis: f64, // Semi-major axis (equatorial radius) in meters
     pub flattening: f64,      // Semi-minor axis (polar radius) in meters
@@ -226,15 +229,15 @@ pub struct VertexData {
     pub vertex_count: u32,
 
     #[br(count = vertex_count)]
-    #[br(map = |i:  Vec<u16>| i.vec_zigzag_decode() )]
+    #[br(map = |i:  Vec<u16>| i.vertex_vec_decode() )]
     pub u: Vec<i32>,
 
     #[br(count = vertex_count)]
-    #[br(map = |i:  Vec<u16>| i.vec_zigzag_decode())]
+    #[br(map = |i:  Vec<u16>| i.vertex_vec_decode())]
     pub v: Vec<i32>,
 
     #[br(count = vertex_count)]
-    #[br(map = |i:  Vec<u16>| i.vec_zigzag_decode())]
+    #[br(map = |i:  Vec<u16>| i.vertex_vec_decode())]
     pub height: Vec<i32>,
 
     #[br(dbg)]
@@ -278,6 +281,40 @@ impl VertexData {
 
         Some(index_data) // Return Some with the index data slice
     }
+
+    pub fn to_geodetic(&self, bounding_box: &BoundingBox, header: &QuantizedMeshHeader) -> Vec<[f64; 3]> {
+        let mut geodetic_coords = Vec::with_capacity(self.vertex_count as usize);
+        for i in 0..self.vertex_count as usize {
+            let lat_lon_height = self.to_geodetic_vertex(
+                i, bounding_box, 
+                header.min_height, 
+                header.max_height
+            );
+            geodetic_coords.push(lat_lon_height);
+        }
+        geodetic_coords
+    }
+
+    pub fn to_geodetic_vertex(
+        &self, 
+        vertex_index: usize, 
+        bbox: &BoundingBox, 
+        min_height: f32, 
+        max_height: f32
+    ) -> [f64; 3] {
+        let u_value = self.u[vertex_index] as f64;
+        let v_value = self.v[vertex_index] as f64;
+        let height_value = self.height[vertex_index] as f64;
+
+        let (min_lon, min_lat) = bbox.lower_left;
+        let (max_lon, max_lat) = bbox.upper_right;
+
+        let x = lerp(min_lon, max_lon, u_value / 32767.0);
+        let y = lerp(min_lat, max_lat, v_value / 32767.0);
+        let z = lerp(min_height as f64, max_height as f64, height_value / 32767.0);
+
+        [x, y, z]
+    }
 }
 
 #[binread]
@@ -298,6 +335,9 @@ pub struct QuantizedMesh {
 
     #[br(parse_with = until_eof)]
     pub extensions: Vec<Extension>,
+
+    #[br(ignore)] // We will calculate this field after parsing
+    pub geodetic_vertices: Vec<[f64; 3]>,  // New field to store georeferenced vertices
 }
 
 impl QuantizedMesh {
@@ -309,6 +349,8 @@ impl QuantizedMesh {
         ellipsoid: Ellipsoid,
         tiling_scheme: TilingScheme,
     ) -> Self {
+
+        let geodetic_vertices = vertex_data.to_geodetic(&bounding_box, &header);
         QuantizedMesh {
             header,
             vertex_data,
@@ -316,76 +358,60 @@ impl QuantizedMesh {
             bounding_box,
             ellipsoid,
             tiling_scheme,
+            geodetic_vertices,
         }
     }
 
-    // local u,v,h to l,l,h
-    pub fn to_geodetic(&self, bounding_box: &BoundingBox) -> Vec<[f64; 3]> {
-        let mut geodetic_coords = Vec::with_capacity(self.vertex_data.vertex_count as usize);
-        for i in 0..self.vertex_data.vertex_count as usize {
-            let lat_lon_height = self.to_geodetic_vertex(i, bounding_box);
-            geodetic_coords.push(lat_lon_height);
-        }
-        geodetic_coords
-    }
 
     pub fn to_geodetic_vertex(&self, vertex_index: usize, bbox: &BoundingBox) -> [f64; 3] {
-        let u_value = self.vertex_data.u[vertex_index] as f64;
-        let v_value = self.vertex_data.v[vertex_index] as f64;
-        let height_value = self.vertex_data.height[vertex_index] as f64;
-
-        let (min_lon, min_lat) = bbox.lower_left; // Lower-left corner
-        let (max_lon, max_lat) = bbox.upper_right; // Upper-right corner
-
-        // Lerp for longitude (x) and latitude (y)
-        let x = lerp(min_lon, max_lon, u_value / 32767.0);
-        let y = lerp(min_lat, max_lat, v_value / 32767.0);
-
-        // Lerp for height (z)
-        let z = lerp(
-            self.header.min_height as f64,
-            self.header.max_height as f64,
-            height_value / 32767.0,
-        );
-
-        [x, y, z]
+        self.vertex_data
+            .to_geodetic_vertex(vertex_index, bbox, self.header.min_height, self.header.max_height)
     }
 
     pub fn to_point3(point: [f64; 3]) -> Point3<f64> {
         Point3::new(point[0], point[1], point[2])
     }
 
-    pub fn get_triangle(
-        &self,
-        triangle_index: usize,
-        bbox: &BoundingBox,
-    ) -> Option<[Point3<f64>; 3]> {
-        let index_data = self.vertex_data.index_data()?;
-
-        let triangle_vertices = [
-            index_data[triangle_index * 3],
-            index_data[triangle_index * 3 + 1],
-            index_data[triangle_index * 3 + 2],
-        ];
-
-        // Check vertex index bounds
-        if triangle_vertices
-            .iter()
-            .any(|&x| x >= self.vertex_data.vertex_count as usize)
-        {
-            return None; // Out of bounds
+        pub fn get_triangle(
+            &self,
+            triangle_index: usize,
+            use_geodetic: bool,
+        ) -> Option<[Point3<f64>; 3]> {
+            let index_data = self.vertex_data.index_data()?;
+    
+            let triangle_vertices = [
+                index_data[triangle_index * 3],
+                index_data[triangle_index * 3 + 1],
+                index_data[triangle_index * 3 + 2],
+            ];
+    
+            // Check vertex index bounds
+            if triangle_vertices
+                .iter()
+                .any(|&x| x >= self.vertex_data.vertex_count as usize)
+            {
+                return None; // Out of bounds
+            }
+    
+            // Use geodetic or raw UV based on the flag
+            let triangle: [Point3<f64>; 3] = if use_geodetic {
+                [
+                    Self::to_point3(self.geodetic_vertices[triangle_vertices[0]]),
+                    Self::to_point3(self.geodetic_vertices[triangle_vertices[1]]),
+                    Self::to_point3(self.geodetic_vertices[triangle_vertices[2]]),
+                ]
+            } else {
+                [
+                    Point3::new(self.vertex_data.u[triangle_vertices[0]] as f64, self.vertex_data.v[triangle_vertices[0]] as f64, self.vertex_data.height[triangle_vertices[0]] as f64),
+                    Point3::new(self.vertex_data.u[triangle_vertices[1]] as f64, self.vertex_data.v[triangle_vertices[1]] as f64, self.vertex_data.height[triangle_vertices[1]] as f64),
+                    Point3::new(self.vertex_data.u[triangle_vertices[2]] as f64, self.vertex_data.v[triangle_vertices[2]] as f64, self.vertex_data.height[triangle_vertices[2]] as f64 ),
+                ]
+            };
+    
+            Some(triangle)
         }
-
-        // Calculate interpolated coordinates for each vertex
-        let triangle: [Point3<f64>; 3] = [
-            Self::to_point3(self.to_geodetic_vertex(triangle_vertices[0], &bbox)),
-            Self::to_point3(self.to_geodetic_vertex(triangle_vertices[1], &bbox)),
-            Self::to_point3(self.to_geodetic_vertex(triangle_vertices[2], &bbox)),
-        ];
-
-        Some(triangle)
     }
-}
+
 
 pub trait EdgeIndices {}
 
@@ -493,14 +519,23 @@ impl HighWatermarkDecode for Vec<u32> {
     }
 }
 
-trait ZigZagDecode {
-    fn vec_zigzag_decode(&self) -> Vec<i32>;
+pub fn zigzag_decode(n: i32) -> i32 {
+    ((n >> 1) ) ^ (-((n & 1) ))
 }
-impl ZigZagDecode for Vec<u16> {
-    fn vec_zigzag_decode(&self) -> Vec<i32> {
+
+trait VertexVecDecode {
+    fn vertex_vec_decode(&self) -> Vec<i32>;
+}
+impl VertexVecDecode for Vec<u16> {
+    fn vertex_vec_decode(&self) -> Vec<i32> {
         let mut res: Vec<i32> = Vec::with_capacity(self.len());
-        for &n in self.iter() {
-            res.push(((n >> 1) as i32) ^ (-((n & 1) as i32)));
+        let mut val = 0;
+
+        for &i in self.iter() {
+            let n = i as i32;
+            val += zigzag_decode(n);
+            //res.push(((n >> 1) ) ^ (-((n & 1) )));
+            res.push(val);
         }
         res
     }

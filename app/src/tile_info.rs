@@ -79,7 +79,14 @@ fn main() -> Result<()> {
     );
 
     // Print the first triangle
-    println!("0: {:#?}", qm.get_triangle(0, &qm.bounding_box));
+    println!("0: {:#?}", qm.get_triangle(0, true));
+
+    // Print the first triangle
+    println!("Vertices: {:#?}", qm.geodetic_vertices);
+
+    println!("Vertices u: {:#?}", qm.vertex_data.u);
+    println!("Vertices v: {:#?}", qm.vertex_data.v);
+    println!("Vertices h: {:#?}", qm.vertex_data.height);
 
     Ok(())
 }

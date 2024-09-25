@@ -12,3 +12,7 @@ nalgebra = "0.33.0"
 [[bin]]
 name = "tile_info"
 path = "src/tile_info.rs"
+
+[[bin]]
+name = "tile_export"
+path = "src/tile_export.rs"
