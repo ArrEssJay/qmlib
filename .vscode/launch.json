@@ -4,6 +4,80 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug executable 'tile_export'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=tile_export",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "tile_export",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'tile_export'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=tile_export",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "tile_export",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'tile_info'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=tile_info",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "tile_info",
+                    "kind": "bin"
+                }
+            },
+            "args": ["./test/data/a/15/59489/9692.terrain"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'tile_info'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=tile_info",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "tile_info",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in library 'qmlib'",
             "cargo": {
                 "args": [
@@ -15,43 +89,6 @@
                 "filter": {
                     "name": "qmlib",
                     "kind": "lib"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'dump_tri'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=dump_tri",
-                    "--package=qmlib"
-                ],
-                "filter": {
-                    "name": "dump_tri",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'dump_tri'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=dump_tri",
-                    "--package=qmlib"
-                ],
-                "filter": {
-                    "name": "dump_tri",
-                    "kind": "bin"
                 }
             },
             "args": [],
