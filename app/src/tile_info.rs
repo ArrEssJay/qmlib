@@ -56,28 +56,30 @@ fn main() -> Result<(), String> {
                 dist_enu
             );
 
+            println!("\nVertex Array: count => [min:max] ");
             println!(
-                "\n\nVertex Count (U): {:#?}",
-                tile.quantized_mesh.vertex_data.u.len()
+                "Vertex (U): {:#?} => [{:#?}:{:#?}]",
+                tile.quantized_mesh.vertex_data.u.len(),
+                tile.quantized_mesh.vertex_data.u.iter().min().unwrap(),
+                tile.quantized_mesh.vertex_data.u.iter().max().unwrap()
             );
             println!(
-                "Vertex Count (V): {:#?}",
-                tile.quantized_mesh.vertex_data.v.len()
+                "Vertex (V): {:#?} => [{:#?}:{:#?}]",
+                tile.quantized_mesh.vertex_data.v.len(),
+                tile.quantized_mesh.vertex_data.u.iter().min().unwrap(),
+                tile.quantized_mesh.vertex_data.u.iter().max().unwrap()
             );
             println!(
-                "Vertex Count (Height): {:#?}",
-                tile.quantized_mesh.vertex_data.height.len()
+                "Vertex (H): {:#?} => [{:#?}:{:#?}]",
+                tile.quantized_mesh.vertex_data.height.len(),
+                tile.quantized_mesh.vertex_data.height.iter().min().unwrap(),
+                tile.quantized_mesh.vertex_data.height.iter().max().unwrap()
             );
 
             println!(
                 "\n\nTriangle Count: {:#?}",
                 tile.quantized_mesh.vertex_data.triangle_count
             );
-            // println!(
-            //     "Triangle Index Len: {:#?}",
-            //     tile.quantized_mesh.vertex_data.triangle_index.len()
-            // );
-           
             println!(
                 "East Edge Vertex Count: {:?}",
                 tile.quantized_mesh

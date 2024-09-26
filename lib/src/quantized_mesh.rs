@@ -222,21 +222,19 @@ pub struct QuantizedMeshHeader {
 #[derive(Debug)]
 #[br(little)]
 pub struct VertexData {
-    #[br(dbg)]
     pub vertex_count: u32,
     
    #[br(parse_with = vertex_vec_decode, args (vertex_count))]
-    pub u: Vec<i32>,
+    pub u: Vec<u16>,
     
     #[br(parse_with = vertex_vec_decode, args (vertex_count))]
-    pub v: Vec<i32>,
+    pub v: Vec<u16>,
   
     #[br(parse_with = vertex_vec_decode, args (vertex_count))]
-    pub height: Vec<i32>,
+    pub height: Vec<u16>,
 
     #[br(align_before = if vertex_count > 65536 { 4 } else { 2 })]
 
-    #[br(dbg)]
     pub triangle_count: u32,
 
     #[br(parse_with = triangle_vec_decode, args ( triangle_count, vertex_count > 65536))]
@@ -391,22 +389,18 @@ impl QuantizedMesh {
     long: bool}
 )]
 pub struct EdgeIndices{
-    #[br(dbg)]
     pub west_vertex_count: u32,
     #[br(parse_with = edge_index_decode, args(west_vertex_count, long))]
     pub west_indices: Vec<usize>,
 
-    #[br(dbg)]
     pub south_vertex_count: u32,
     #[br(parse_with = edge_index_decode, args(south_vertex_count, long))]
     pub south_indices: Vec<usize>,
 
-    #[br(dbg)]
     pub east_vertex_count: u32,
     #[br(parse_with = edge_index_decode, args(east_vertex_count, long))]
     pub east_indices: Vec<usize>,
 
-    #[br(dbg)]
     pub north_vertex_count: u32,
     #[br(parse_with = edge_index_decode, args(north_vertex_count, long))]
     pub north_indices: Vec<usize>,
@@ -462,24 +456,40 @@ pub fn edge_index_decode(count: u32, long: bool) -> binrw::BinResult<Vec<usize>>
     Ok(result)
 }
 
+
 // Vertices are delta and zig-zag encoded as a vec<u16>
-// Technically the encoding can produce a negative index value
+// This encoding can produce a negative index value
+// In this case we know min u,v=0
 #[binrw::parser(reader,endian)]
-pub fn vertex_vec_decode(count: u32) ->  binrw::BinResult<Vec<i32>> {
-    let mut res: Vec<i32> = Vec::with_capacity(count as usize);
-    let mut val = 0;
+pub fn vertex_vec_decode(count: u32) ->  binrw::BinResult<Vec<u16>> {
+    let mut res: Vec<u16> = Vec::with_capacity(count as usize);
+    let mut val: u16 = 0;
 
     for _ in 0..count {
+        
+        let n = u16::read_options(reader, endian, ())?;
+        let decoded = (n as i16>> 1) ^ (-(n as i16 & 1));
+        // Attempt to add decoded to val, checking for overflow
+        
 
-        let n = u16::read_options(reader, endian, ())? as i32;
-        val += (n >> 1) ^ (-(n & 1)); // zigzag decode
+    // Attempt to add decoded to val, checking for overflow
+    val = val
+    .checked_add_signed(decoded)
+    .ok_or_else(|| {
+        binrw::Error::AssertFail {
+            pos: reader.stream_position().unwrap(), // Include the stream position in the error
+            message: format!("Overflow occurred while decoding value: {}", decoded),
+        }
+    })?;
+        
+       
         res.push(val);
     }
    Ok(res)
 } 
 
 // Triangle index is high watermark encoded
-// Triangle index is high watermark encoded
+// Sanity check included as this encoding can 
 #[binrw::parser(reader, endian)]
 pub fn triangle_vec_decode(count: u32, long: bool) -> binrw::BinResult<Vec<[usize; 3]>> {
     let mut res: Vec<[usize; 3]> = Vec::with_capacity(count as usize);
@@ -491,32 +501,28 @@ pub fn triangle_vec_decode(count: u32, long: bool) -> binrw::BinResult<Vec<[usiz
 
         for j in 0..3 {
             let n: usize = if long {
-                u32::read_options(reader, endian, ())? as usize // Read u32
+                u32::read_options(reader, endian, ())? as usize
             } else {
-                u16::read_options(reader, endian, ())? as usize // Read u16 and cast to usize
+                u16::read_options(reader, endian, ())? as usize
             };
 
-            if n > highest {
-                 return Err(binrw::Error::AssertFail {
-                    pos: reader.stream_position()?, // Include the stream position in the error
-                    message: 
-                        format!(
-                            "Invalid high watermark index encoding - highest: {} < value: {}",
-                            highest, n
-                        )
-                    
-                });
-            }
+            // bounds check
+            tri[j] = highest.checked_sub(n)
+            .ok_or_else(|| {
+                binrw::Error::AssertFail {
+                    pos: reader.stream_position().unwrap(), // Include the stream position in the error
+                    message: format!(
+                        "Invalid high watermark index encoding - highest: {} < value: {}",
+                        highest, n
+                    ),
+                }
+            })?;
 
-            tri[j] = highest - n; // Store the computed vertex reference
-
-            // Update highest if needed
             if n == 0 {
                 highest += 1;
             }
         }
 
-        // Push the triangle array into the result vector
         res.push(tri);
     }
 
