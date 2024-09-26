@@ -73,15 +73,11 @@ fn main() -> Result<(), String> {
                 "\n\nTriangle Count: {:#?}",
                 tile.quantized_mesh.vertex_data.triangle_count
             );
-            println!(
-                "Triangle Long Index: {:#?}",
-                tile.quantized_mesh.vertex_data.index_data_long.is_some()
-            );
-            println!(
-                "Triangle Short Index: {:#?}",
-                tile.quantized_mesh.vertex_data.index_data_short.is_some()
-            );
-
+            // println!(
+            //     "Triangle Index Len: {:#?}",
+            //     tile.quantized_mesh.vertex_data.triangle_index.len()
+            // );
+           
             println!(
                 "East Edge Vertex Count: {:?}",
                 tile.quantized_mesh

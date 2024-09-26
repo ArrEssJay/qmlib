@@ -6,6 +6,7 @@ use nalgebra::{Matrix4, Point3, Vector3};
 pub mod kml_writer;
 pub mod svg_writer;
 pub mod tile;
+
 /// Ellipsoids
 #[derive(Debug, Default)]
 pub struct Ellipsoid {
@@ -220,58 +221,33 @@ pub struct QuantizedMeshHeader {
 #[derive(Debug)]
 #[br(little)]
 pub struct VertexData {
+    #[br(dbg)]
     pub vertex_count: u32,
-
-    #[br(count = vertex_count)]
-    #[br(map = |i:  Vec<u16>| i.vertex_vec_decode() )]
+    
+   #[br(parse_with = vertex_vec_decode, args (vertex_count))]
     pub u: Vec<i32>,
-
-    #[br(count = vertex_count)]
-    #[br(map = |i:  Vec<u16>| i.vertex_vec_decode())]
+    
+    #[br(parse_with = vertex_vec_decode, args (vertex_count))]
     pub v: Vec<i32>,
-
-    #[br(count = vertex_count)]
-    #[br(map = |i:  Vec<u16>| i.vertex_vec_decode())]
+  
+    #[br(parse_with = vertex_vec_decode, args (vertex_count))]
     pub height: Vec<i32>,
 
+    #[br(align_before = if vertex_count > 65536 { 4 } else { 2 })]
+
+    #[br(dbg)]
     pub triangle_count: u32,
 
-    #[br(align_before = 4)]
-    #[br(count = triangle_count * 3)]
-    #[br(if(vertex_count > 65536) )]
-    #[br(map = |i:  Vec<u32>| Some(i.high_watermark_decode()))]
-    pub index_data_long: Option<Vec<usize>>,
+    #[br(parse_with = triangle_vec_decode, args ( triangle_count * 3, vertex_count > 65536))]
+    pub triangle_index: Vec<usize>,
 
-    #[br(align_before = 2)]
-    #[br(count = triangle_count * 3)]
-    #[br(if(vertex_count <= 65536))]
-    #[br(map = |i: Vec<u16>| {
-        let u32_vec: Vec<u32> = i.into_iter().map(|x| x as u32).collect();
-        Some(u32_vec.high_watermark_decode())
-    })]
-    pub index_data_short: Option<Vec<usize>>,
-
-    #[br(align_before = if vertex_count > 65536 { 4 } else { 2 })]
-        #[br(args {
-        long: vertex_count > 65536
+    #[br(args {
+    long: vertex_count > 65536
     })]
     pub edge_indices: EdgeIndices,
 }
 
 impl VertexData {
-    pub fn index_data(&self) -> Option<&[usize]> {
-        // Check if long or short index data exists
-        let index_data = match (
-            self.index_data_long.as_ref(),
-            self.index_data_short.as_ref(),
-        ) {
-            (Some(long), _) => long.as_slice(),
-            (None, Some(short)) => short.as_slice(),
-            (None, None) => return None,
-        };
-
-        Some(index_data)
-    }
 
     pub fn to_geodetic(
         &self,
@@ -368,18 +344,18 @@ impl QuantizedMesh {
 
     pub fn get_triangle(
         &self,
-        triangle_index: usize,
+        triangle: usize,
         use_geodetic: bool,
     ) -> Option<[Point3<f64>; 3]> {
-        let index_data = self.vertex_data.index_data()?;
+        let triangle_index = &self.vertex_data.triangle_index;
 
         let triangle_vertices = [
-            index_data[triangle_index * 3],
-            index_data[triangle_index * 3 + 1],
-            index_data[triangle_index * 3 + 2],
+            triangle_index[triangle * 3],
+            triangle_index[triangle * 3 + 1],
+            triangle_index[triangle * 3 + 2],
         ];
 
-        // Check vertex index bounds
+        // Check vertex indsex bounds
         if triangle_vertices
             .iter()
             .any(|&x| x >= self.vertex_data.vertex_count as usize)
@@ -430,25 +406,23 @@ impl QuantizedMesh {
 pub struct EdgeIndices{
     #[br(dbg)]
     pub west_vertex_count: u32,
-    #[br(dbg)]
-    #[br(parse_with = read_u16_u32_as_u32, args(west_vertex_count as usize, long))]
-    pub west_indices: Vec<u32>,
+    #[br(parse_with = edge_index_decode, args(west_vertex_count, long))]
+    pub west_indices: Vec<usize>,
 
     #[br(dbg)]
     pub south_vertex_count: u32,
-    #[br(parse_with = read_u16_u32_as_u32, args(south_vertex_count as usize, long))]
-    pub south_indices: Vec<u32>,
+    #[br(parse_with = edge_index_decode, args(south_vertex_count, long))]
+    pub south_indices: Vec<usize>,
 
     #[br(dbg)]
     pub east_vertex_count: u32,
-    #[br(parse_with = read_u16_u32_as_u32, args(east_vertex_count as usize, long))]
-    pub east_indices: Vec<u32>,
+    #[br(parse_with = edge_index_decode, args(east_vertex_count, long))]
+    pub east_indices: Vec<usize>,
 
     #[br(dbg)]
     pub north_vertex_count: u32,
-    #[br(dbg)]
-    #[br(parse_with = read_u16_u32_as_u32, args(east_vertex_count as usize, long))]
-    pub north_indices: Vec<u32>,
+    #[br(parse_with = edge_index_decode, args(north_vertex_count, long))]
+    pub north_indices: Vec<usize>,
 }
 
 #[binread]
@@ -474,46 +448,6 @@ pub struct Extension {
     pub extension_data: Vec<u8>,
 }
 
-trait HighWatermarkDecode {
-    fn high_watermark_decode(&self) -> Vec<usize>;
-}
-
-impl HighWatermarkDecode for Vec<u32> {
-    fn high_watermark_decode(&self) -> Vec<usize> {
-        let mut decoded: Vec<usize> = Vec::with_capacity(self.len());
-        let mut highest: usize = 0;
-
-        for &i in self.iter() {
-            decoded.push(highest - (i as usize));
-            if i == 0 {
-                highest += 1;
-            }
-        }
-        decoded
-    }
-}
-
-pub fn zigzag_decode(n: i32) -> i32 {
-    (n >> 1) ^ (-(n & 1))
-}
-
-trait VertexVecDecode {
-    fn vertex_vec_decode(&self) -> Vec<i32>;
-}
-impl VertexVecDecode for Vec<u16> {
-    fn vertex_vec_decode(&self) -> Vec<i32> {
-        let mut res: Vec<i32> = Vec::with_capacity(self.len());
-        let mut val = 0;
-
-        for &i in self.iter() {
-            let n = i as i32;
-            val += zigzag_decode(n);
-            res.push(val);
-        }
-        res
-    }
-}
-
 #[binrw::parser(reader, endian)]
 fn parse_point3() -> BinResult<Point3<f64>> {
     Ok(Point3::new(
@@ -523,29 +457,56 @@ fn parse_point3() -> BinResult<Point3<f64>> {
     ))
 }
 
-// #[binrw::parser(reader, endian)]
-// pub fn read_u16_as_u32() -> binrw::BinResult<u32> {
-//     let val = u16::read_options(reader, endian, ())?;
-//     println!("Read u16 bytes: {:?}", val);
-//     Ok(val as u32) // Converts u16 to u32
-// }
-
-
+// An edge index can be vector of u16 or u32. Read either and return as vec<u32>
 #[binrw::parser(reader,endian)]
-pub fn read_u16_u32_as_u32(count: usize, long: bool) -> binrw::BinResult<Vec<u32>> {
-    let mut result = Vec::with_capacity(count);
+pub fn edge_index_decode(count: u32, long: bool) -> binrw::BinResult<Vec<usize>> {
+    let mut result = Vec::with_capacity(count as usize);
     
     // Read 'count' number of u16 values and convert to u32
     for _ in 0..count {
         if long {
-            let val = u32::read_options(reader, endian, ())?;
-            result.push(val);
+            result.push(u32::read_options(reader, endian, ())? as usize);
         }
         else {
-            let val = u16::read_options(reader, endian, ())?;
-            result.push(val as u32);
+            result.push( u16::read_options(reader, endian, ())? as usize);
         }
     }
     
     Ok(result)
+}
+
+// Vertices are delta and zig-zag encoded as a vec<u16>
+// Technically the encoding can produce a negative index value
+#[binrw::parser(reader,endian)]
+pub fn vertex_vec_decode(count: u32) ->  binrw::BinResult<Vec<i32>> {
+    let mut res: Vec<i32> = Vec::with_capacity(count as usize);
+    let mut val = 0;
+
+    for _ in 0..count {
+
+        let n = u16::read_options(reader, endian, ())? as i32;
+        val += (n >> 1) ^ (-(n & 1)); // zigzag decode
+        res.push(val);
+    }
+   Ok(res)
+}
+
+// Triangle index is high watermark encoded
+#[binrw::parser(reader,endian)]
+pub fn triangle_vec_decode(count: u32, long: bool) ->  binrw::BinResult<Vec<usize>> {
+    let mut res: Vec<usize> = Vec::with_capacity(count as usize);
+    let mut highest: usize = 0;
+
+    for _ in 0..count {
+        
+        let n: usize = if long 
+            { u32::read_options(reader, endian, ())? as usize} else 
+            { u16::read_options(reader, endian, ())? as usize};
+
+        res.push(highest - n);
+        if n == 0 {
+            highest += 1;
+        }
+    }
+   Ok(res)
 }

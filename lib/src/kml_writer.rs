@@ -14,10 +14,9 @@ use crate::QuantizedMesh;
         kml_data.push_str(r#"<Document>"#);
 
         // Get index data
-        let index_data = quantized_mesh
+        let index_data = &quantized_mesh
             .vertex_data
-            .index_data()
-            .expect("Failed to retrieve index data");
+            .triangle_index;
 
         // Loop through triangles and write to KML
         for triangle_index in 0..(index_data.len() / 3) {
