@@ -75,6 +75,7 @@ impl BoundingBox {
 
 pub type CartesianPoint3 = Point3<f64>;
 pub type GeodeticPoint3 = Point3<f64>;
+pub type TriangleVertexIndex = [usize; 3];
 
 pub trait ToDegrees {
     fn to_degrees(self) -> GeodeticPoint3;
@@ -238,8 +239,8 @@ pub struct VertexData {
     #[br(dbg)]
     pub triangle_count: u32,
 
-    #[br(parse_with = triangle_vec_decode, args ( triangle_count * 3, vertex_count > 65536))]
-    pub triangle_index: Vec<usize>,
+    #[br(parse_with = triangle_vec_decode, args ( triangle_count, vertex_count > 65536))]
+    pub triangle_index: Vec<TriangleVertexIndex>,
 
     #[br(args {
     long: vertex_count > 65536
@@ -347,45 +348,31 @@ impl QuantizedMesh {
         triangle: usize,
         use_geodetic: bool,
     ) -> Option<[Point3<f64>; 3]> {
-        let triangle_index = &self.vertex_data.triangle_index;
-
-        let triangle_vertices = [
-            triangle_index[triangle * 3],
-            triangle_index[triangle * 3 + 1],
-            triangle_index[triangle * 3 + 2],
-        ];
-
-        // Check vertex indsex bounds
-        if triangle_vertices
-            .iter()
-            .any(|&x| x >= self.vertex_data.vertex_count as usize)
-        {
-            return None; // Out of bounds
-        }
+        let triangle_index = &self.vertex_data.triangle_index[triangle];
 
         // Use geodetic or raw UV based on the flag
         let triangle: [Point3<f64>; 3] = if use_geodetic {
             [
-                Self::to_point3(self.geodetic_vertices[triangle_vertices[0]]),
-                Self::to_point3(self.geodetic_vertices[triangle_vertices[1]]),
-                Self::to_point3(self.geodetic_vertices[triangle_vertices[2]]),
+                Self::to_point3(self.geodetic_vertices[triangle_index[0]]),
+                Self::to_point3(self.geodetic_vertices[triangle_index[1]]),
+                Self::to_point3(self.geodetic_vertices[triangle_index[2]]),
             ]
         } else {
             [
                 Point3::new(
-                    self.vertex_data.u[triangle_vertices[0]] as f64,
-                    self.vertex_data.v[triangle_vertices[0]] as f64,
-                    self.vertex_data.height[triangle_vertices[0]] as f64,
+                    self.vertex_data.u[triangle_index[0]] as f64,
+                    self.vertex_data.v[triangle_index[0]] as f64,
+                    self.vertex_data.height[triangle_index[0]] as f64,
                 ),
                 Point3::new(
-                    self.vertex_data.u[triangle_vertices[1]] as f64,
-                    self.vertex_data.v[triangle_vertices[1]] as f64,
-                    self.vertex_data.height[triangle_vertices[1]] as f64,
+                    self.vertex_data.u[triangle_index[1]] as f64,
+                    self.vertex_data.v[triangle_index[1]] as f64,
+                    self.vertex_data.height[triangle_index[1]] as f64,
                 ),
                 Point3::new(
-                    self.vertex_data.u[triangle_vertices[2]] as f64,
-                    self.vertex_data.v[triangle_vertices[2]] as f64,
-                    self.vertex_data.height[triangle_vertices[2]] as f64,
+                    self.vertex_data.u[triangle_index[2]] as f64,
+                    self.vertex_data.v[triangle_index[2]] as f64,
+                    self.vertex_data.height[triangle_index[2]] as f64,
                 ),
             ]
         };
@@ -489,24 +476,49 @@ pub fn vertex_vec_decode(count: u32) ->  binrw::BinResult<Vec<i32>> {
         res.push(val);
     }
    Ok(res)
-}
+} 
 
 // Triangle index is high watermark encoded
-#[binrw::parser(reader,endian)]
-pub fn triangle_vec_decode(count: u32, long: bool) ->  binrw::BinResult<Vec<usize>> {
-    let mut res: Vec<usize> = Vec::with_capacity(count as usize);
+// Triangle index is high watermark encoded
+#[binrw::parser(reader, endian)]
+pub fn triangle_vec_decode(count: u32, long: bool) -> binrw::BinResult<Vec<[usize; 3]>> {
+    let mut res: Vec<[usize; 3]> = Vec::with_capacity(count as usize);
     let mut highest: usize = 0;
 
     for _ in 0..count {
-        
-        let n: usize = if long 
-            { u32::read_options(reader, endian, ())? as usize} else 
-            { u16::read_options(reader, endian, ())? as usize};
+        // Initialize an array for the triangle
+        let mut tri: TriangleVertexIndex = [0; 3];
 
-        res.push(highest - n);
-        if n == 0 {
-            highest += 1;
+        for j in 0..3 {
+            let n: usize = if long {
+                u32::read_options(reader, endian, ())? as usize // Read u32
+            } else {
+                u16::read_options(reader, endian, ())? as usize // Read u16 and cast to usize
+            };
+
+            if n > highest {
+                 return Err(binrw::Error::AssertFail {
+                    pos: reader.stream_position()?, // Include the stream position in the error
+                    message: 
+                        format!(
+                            "Invalid high watermark index encoding - highest: {} < value: {}",
+                            highest, n
+                        )
+                    
+                });
+            }
+
+            tri[j] = highest - n; // Store the computed vertex reference
+
+            // Update highest if needed
+            if n == 0 {
+                highest += 1;
+            }
         }
+
+        // Push the triangle array into the result vector
+        res.push(tri);
     }
-   Ok(res)
+
+    Ok(res)
 }
