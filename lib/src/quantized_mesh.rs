@@ -9,6 +9,7 @@ pub mod svg_writer;
 pub mod tile;
 pub mod tiff_writer;
 pub mod geometry;
+pub mod raster;
 
 
 // Constants
