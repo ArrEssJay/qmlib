@@ -113,43 +113,6 @@ pub struct QuantizedMeshHeader {
         pub edge_indices: EdgeIndices,
     }
 
-impl VertexData {
-
-    pub fn to_geodetic(
-        &self,
-        bounding_rectangle: &GeodeticRectangle<f64>,
-        header: &QuantizedMeshHeader,
-    ) -> Vec<GeodeticPoint3<f64>> {
-        let mut geodetic_coords = Vec::with_capacity(self.vertex_count as usize);
-        for i in 0..self.vertex_count as usize {
-            let lat_lon_height =
-                self.to_geodetic_vertex(i, bounding_rectangle, header.min_height, header.max_height);
-            geodetic_coords.push(lat_lon_height);
-        }
-        geodetic_coords
-    }
-
-    pub fn to_geodetic_vertex(
-        &self,
-        vertex_index: usize,
-        bounding_rectangle: &GeodeticRectangle<f64>,
-        min_height: f32,
-        max_height: f32,
-    ) -> GeodeticPoint3<f64> {
-        let u_value = self.u[vertex_index] as f64;
-        let v_value = self.v[vertex_index] as f64;
-        let height_value = self.height[vertex_index] as f64;
-
-        let ll = &bounding_rectangle.lower_left;
-        let ur  = &bounding_rectangle.upper_right;
-
-        let lat = lerp(ll.lon(), ur.lon(), &(u_value / UV_MAX_F64));
-        let lon = lerp(ll.lat(), ur.lat(), &(v_value / UV_MAX_F64));
-        let alt = lerp(&(min_height as f64), &(max_height as f64), &(height_value / UV_MAX_F64));
-
-        GeodeticPoint3::new(lat, lon, alt)
-    }
-}
 
 #[binread]
 #[derive(Debug)]
@@ -170,8 +133,6 @@ pub struct QuantizedMesh {
     #[br(parse_with = until_eof)]
     pub extensions: Vec<Extension>,
 
-    #[br(ignore)]
-    pub geodetic_vertices: Vec<GeodeticPoint3<f64>>,
 }
 
 impl QuantizedMesh {
@@ -183,7 +144,6 @@ impl QuantizedMesh {
         ellipsoid: Ellipsoid,
         tiling_scheme: TilingScheme,
     ) -> Self {
-        let geodetic_vertices = vertex_data.to_geodetic(&bounding_rectangle, &header);
         QuantizedMesh {
             header,
             vertex_data,
@@ -191,18 +151,47 @@ impl QuantizedMesh {
             bounding_rectangle,
             ellipsoid,
             tiling_scheme,
-            geodetic_vertices,
         }
     }
 
-    pub fn to_geodetic_vertex(&self, vertex_index: usize) -> GeodeticPoint3<f64> {
-        self.vertex_data.to_geodetic_vertex(
-            vertex_index,
-            &self.bounding_rectangle,
-            self.header.min_height,
-            self.header.max_height,
-        )
-   
+    pub fn vertex_as_geodetic_point3(
+        &self,
+        vertex_index: usize,
+    ) -> GeodeticPoint3<f64> {
+        let u_value = self.vertex_data.u[vertex_index] as f64;
+        let v_value = self.vertex_data.v[vertex_index] as f64;
+        let height_value = self.vertex_data.height[vertex_index] as f64;
+
+        let ll = &self.bounding_rectangle.lower_left;
+        let ur  = &self.bounding_rectangle.upper_right;
+
+        let lat = lerp(ll.lon(), ur.lon(), &(u_value / UV_MAX_F64));
+        let lon = lerp(ll.lat(), ur.lat(), &(v_value / UV_MAX_F64));
+        let alt: f64 = lerp(&(self.header.min_height as f64), &(self.header.max_height as f64), &(height_value / UV_MAX_F64));
+
+        GeodeticPoint3::new(lat, lon, alt)
+    }
+
+    pub fn vertices_as_geodetic_point3(
+        &self,
+    ) -> Vec<GeodeticPoint3<f64>> {
+        let mut geodetic_coords = Vec::with_capacity(self.vertex_data.vertex_count as usize);
+        for i in 0..self.vertex_data.vertex_count as usize {
+            let lat_lon_height =
+                self.vertex_as_geodetic_point3(i);
+            geodetic_coords.push(lat_lon_height);
+        }
+        geodetic_coords
+    }
+
+    pub fn interpolated_height_vertices(
+        &self,
+    ) -> Vec<f64> {
+        let mut heights: Vec<f64> = Vec::with_capacity(self.vertex_data.vertex_count as usize);
+        for i in 0..self.vertex_data.vertex_count as usize {
+            heights.push(lerp(&(self.header.min_height as f64), &(self.header.max_height as f64), &(self.vertex_data.height[i] as f64 / UV_MAX_F64)));
+        }
+        heights
     }
     
 }

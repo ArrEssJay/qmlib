@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 
-pub fn export_to_kml(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
+pub fn export_to_kml(qm: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
     let mut kml_data = String::new();
 
     // KML Header
@@ -13,14 +13,16 @@ pub fn export_to_kml(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Re
     kml_data.push_str(r#"<Document>"#);
 
     // Get index data
-    let index_data: &Vec<[usize; 3]> = &quantized_mesh.vertex_data.triangle_index;
+    let index_data: &Vec<[usize; 3]> = &qm.vertex_data.triangle_index;
+    let vertices = &qm.vertices_as_geodetic_point3();
 
     // Loop through triangles and write to KML
     for (idx, triangle_indices) in index_data.iter().enumerate() {
+        
         let triangle: [&GeodeticPoint3<f64>; 3] = [
-            &quantized_mesh.geodetic_vertices[triangle_indices[0]],
-            &quantized_mesh.geodetic_vertices[triangle_indices[1]],
-            &quantized_mesh.geodetic_vertices[triangle_indices[2]],
+            &vertices[triangle_indices[0]],
+            &vertices[triangle_indices[1]],
+            &vertices[triangle_indices[2]],
         ];
 
         // KML Placemark for each triangle
@@ -44,7 +46,7 @@ pub fn export_to_kml(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Re
     }
 
     // Add all geodetic vertices as placemarks
-    for (i, vertex) in quantized_mesh.geodetic_vertices.iter().enumerate() {
+    for (i, vertex) in vertices.iter().enumerate() {
         kml_data.push_str(r#"<Placemark>"#);
         kml_data.push_str(&format!(r#"<name>Vertex {}</name>"#, i));
         kml_data.push_str(r#"<Point><coordinates>"#);
