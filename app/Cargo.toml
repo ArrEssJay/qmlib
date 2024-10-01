@@ -16,3 +16,7 @@ path = "src/tile_info.rs"
 [[bin]]
 name = "tile_export"
 path = "src/tile_export.rs"
+
+[[bin]]
+name = "tile_raster"
+path = "src/tile_raster.rs"

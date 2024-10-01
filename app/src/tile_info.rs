@@ -1,12 +1,12 @@
 use core::str;
-use qmlib::{tile, GeodeticPoint3, ToDegrees};
 use std::env;
 use std::path::PathBuf;
-use std::result::Result; // Add this import to use Result
+use std::result::Result;
+
+use qmlib::geometry::calculate_enu_to_ecef_rotation_matrix;
+use qmlib::tile;
 
 fn main() -> Result<(), String> {
-    // Update Result to specify the error type
-    // Get the path from command line arguments
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
@@ -23,7 +23,7 @@ fn main() -> Result<(), String> {
             // Get bounding box
             println!(
                 "Tile Bounding Rectangle: {:#?}",
-                tile.quantized_mesh.bounding_box
+                tile.quantized_mesh.bounding_rectangle
             );
 
             // Print center of tile in ecef and lat/lon
@@ -32,24 +32,25 @@ fn main() -> Result<(), String> {
                 tile.quantized_mesh.header.center
             );
 
-            let centre_geodetic: GeodeticPoint3 = qmlib::ecef_to_geodetic(
-                &tile.quantized_mesh.header.center,
-                &tile.quantized_mesh.ellipsoid,
-            );
+            let centre_geodetic = tile
+                .quantized_mesh
+                .header
+                .center
+                .to_geodetic(&tile.quantized_mesh.ellipsoid);
             println!(
                 "Tile Centre (Geodetic): {:#?}",
                 centre_geodetic.to_degrees()
             );
 
             // Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
-            let to_enu_matrix = qmlib::calculate_enu_to_ecef_rotation_matrix(
-                tile.quantized_mesh.header.center,
+            let to_enu_matrix = calculate_enu_to_ecef_rotation_matrix(
+                &tile.quantized_mesh.header.center,
                 &tile.quantized_mesh.ellipsoid,
             )
             .transpose();
             let dist_enu = to_enu_matrix.transform_vector(
-                &(tile.quantized_mesh.header.bounding_sphere.center
-                    - tile.quantized_mesh.header.center),
+                &(tile.quantized_mesh.header.bounding_sphere.center.0
+                    - &tile.quantized_mesh.header.center.0),
             );
             println!(
                 "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",
@@ -66,8 +67,8 @@ fn main() -> Result<(), String> {
             println!(
                 "Vertex (V): {:#?} => [{:#?}:{:#?}]",
                 tile.quantized_mesh.vertex_data.v.len(),
-                tile.quantized_mesh.vertex_data.u.iter().min().unwrap(),
-                tile.quantized_mesh.vertex_data.u.iter().max().unwrap()
+                tile.quantized_mesh.vertex_data.v.iter().min().unwrap(),
+                tile.quantized_mesh.vertex_data.v.iter().max().unwrap()
             );
             println!(
                 "Vertex (H): {:#?} => [{:#?}:{:#?}]",
