@@ -12,10 +12,9 @@ pub fn rasterize(qm: &QuantizedMesh, scale_shift: u16) -> Vec<Option<f32>> {
     let raster_size = get_raster_size(scale_shift);
     let mut raster: Vec<Option<f32>> = vec![None; raster_size as usize * raster_size as usize];
     let v = &qm.vertex_data;
-
+    let heights = &qm.interpolated_height_vertices();
     for triangle_index in 0..v.triangle_index.len() {
         let triangle_indices = &v.triangle_index[triangle_index];
-        assert!(triangle_indices.iter().all(|&i| i < v.u.len()));
 
         let triangle = Triangle {
             vertices: [
@@ -34,10 +33,10 @@ pub fn rasterize(qm: &QuantizedMesh, scale_shift: u16) -> Vec<Option<f32>> {
             ],
         };
 
-        let heights: [u16; 3] = [
-            qm.vertex_data.height[triangle_indices[0] as usize],
-            qm.vertex_data.height[triangle_indices[1] as usize],
-            qm.vertex_data.height[triangle_indices[2] as usize],
+        let tri_heights = [
+            heights[triangle_indices[0]],
+            heights[triangle_indices[1]],
+            heights[triangle_indices[2]],
         ];
 
         let triangle_bounds = triangle.bounding_rect();
@@ -52,7 +51,7 @@ pub fn rasterize(qm: &QuantizedMesh, scale_shift: u16) -> Vec<Option<f32>> {
                 let raster_idx = (py as usize * raster_size as usize) + px as usize;
                 if raster[raster_idx] == None {
                     if let Some(interpolated_height) =
-                        barycentric_coords_and_interpolate_height(point, &triangle, &heights)
+                        interpolate_height_in_triangle(point, &triangle, &tri_heights)
                     {
                         raster[raster_idx] = Some(interpolated_height);
                     }
@@ -62,6 +61,51 @@ pub fn rasterize(qm: &QuantizedMesh, scale_shift: u16) -> Vec<Option<f32>> {
     }
 
     raster
+}
+
+fn interpolate_height_in_triangle(
+    point: Point2<f64>,
+    triangle: &Triangle<f64>,
+    heights: &[f64; 3],
+) -> Option<f32> {
+    let v0 = triangle.vertices[0];
+    let v1 = triangle.vertices[1];
+    let v2 = triangle.vertices[2];
+
+    // Translate points so that v0 is the origin
+    let p_prime = point - v0;
+    let v1_prime = v1 - v0;
+    let v2_prime = v2 - v0;
+
+    // Create the 2x2 matrix A with v1_prime and v2_prime as columns
+    let a = Matrix2::new(v1_prime.x, v2_prime.x, v1_prime.y, v2_prime.y);
+
+    // Check if the matrix is invertible (non-zero determinant)
+    if let Some(a_inv) = a.try_inverse() {
+        // Solve for lambda1 and lambda2
+        let lambda = a_inv * p_prime;
+
+        // Calculate lambda0
+        let lambda0 = 1.0 - lambda.x - lambda.y;
+
+        // Ensure that the barycentric coordinates are valid (inside the triangle)
+        // Add a small epsilon threshold to account for floating-point precision errors.
+        if lambda0 >= -f64::EPSILON && lambda.x >= -f64::EPSILON && lambda.y >= -f64::EPSILON {
+            // Interpolate the height using the barycentric coordinates
+            // Reduce precision to f32
+            let interpolated_height = (lambda0 * heights[0] as f64
+                + lambda.x * heights[1] as f64
+                + lambda.y * heights[2] as f64) as f32;
+
+            Some(interpolated_height)
+        } else {
+            // The point is outside the triangle
+            None
+        }
+    } else {
+        // The triangle is degenerate (area is zero), no solution
+        None
+    }
 }
 
 pub fn export_to_tiff(
@@ -94,48 +138,4 @@ pub fn export_to_tiff(
     encoder.write_image::<Gray32Float>(raster_size.into(), raster_size.into(), &image_data)?;
 
     Ok(())
-}
-
-fn barycentric_coords_and_interpolate_height(
-    point: Point2<f64>,
-    triangle: &Triangle<f64>,
-    heights: &[u16; 3], // Heights at the vertices
-) -> Option<f32> {
-    let v0 = triangle.vertices[0];
-    let v1 = triangle.vertices[1];
-    let v2 = triangle.vertices[2];
-
-    // Translate points so that v0 is the origin
-    let p_prime = point - v0;
-    let v1_prime = v1 - v0;
-    let v2_prime = v2 - v0;
-
-    // Create the 2x2 matrix A with v1_prime and v2_prime as columns
-    let a = Matrix2::new(v1_prime.x, v2_prime.x, v1_prime.y, v2_prime.y);
-
-    // Check if the matrix is invertible (non-zero determinant)
-    if let Some(a_inv) = a.try_inverse() {
-        // Solve for lambda1 and lambda2
-        let lambda = a_inv * p_prime;
-
-        // Calculate lambda0
-        let lambda0 = 1.0 - lambda.x - lambda.y;
-
-        // Ensure that the barycentric coordinates are valid (inside the triangle)
-
-        if lambda0 >= -f64::EPSILON && lambda.x >= -f64::EPSILON && lambda.y >= -f64::EPSILON {
-            // Interpolate the height using the barycentric coordinates
-            let interpolated_height = (lambda0 * heights[0] as f64
-                + lambda.x * heights[1] as f64
-                + lambda.y * heights[2] as f64) as f32;
-
-            Some(interpolated_height)
-        } else {
-            // The point is outside the triangle
-            None
-        }
-    } else {
-        // The triangle is degenerate (area is zero), no solution
-        None
-    }
 }
