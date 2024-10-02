@@ -33,6 +33,9 @@ For the WGS84 Geographic case, approximate (equatorial) raster cell sizes (metre
 | 5 | 1024             | 4887.9         | 2443.9       | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4         | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
 | 6 | 512              | 2443.9         | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4         | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
 
+## Tests/Benchmarks
+- `cargo test` - Run tests
+- `cargo bench --release` - Run Criterion benchmarks with release optimisation flags
 
 ## To Do
 - Write to a well-supported mesh format or link to MDAL.

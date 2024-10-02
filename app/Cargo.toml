@@ -4,6 +4,13 @@ name = "qmlib_apps"
 version = "0.1.0"
 edition = "2021"
 
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "bench_write_tiff"
+harness = false
+
 [dependencies]
 qmlib = { path = "../lib" }  # Local path to the library
 binrw = "0.14.0"

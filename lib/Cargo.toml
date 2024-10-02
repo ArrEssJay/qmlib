@@ -3,11 +3,15 @@ name = "qmlib"
 version = "0.1.0"
 edition = "2021"
 
+[dev-dependencies]
+criterion = "0.5.1"
+
 [dependencies]
 binrw = "0.14.0"
 libc = "0.2.158"
 nalgebra = "0.33.0"
 num-traits = "0.2.19"
+rayon = "1.10.0"
 tiff = "0.9.1"    
 
 [lib]

@@ -178,3 +178,17 @@ pub fn load_quantized_mesh_tile(path: &PathBuf) -> Result<QuantizedMeshTile, Str
 
     Ok(qmtile)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use crate::quantized_mesh_tile;
+
+    #[test]
+    fn test_load_tile() {
+        // Assume you have a valid test tile path
+        let path = PathBuf::from(format!("{}/test/terrain_data/a/15/59489/9692.terrain", env!("CARGO_MANIFEST_DIR")));       
+        let result = quantized_mesh_tile::load_quantized_mesh_tile(&path);
+        assert!(result.is_ok(), "Failed to load tile: {:?}", result.err());
+    }
+}

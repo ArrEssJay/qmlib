@@ -86,24 +86,20 @@ pub fn write_tiff(
         .write_tag(Tag::GeoKeyDirectoryTag, &geo_key_directory[..])
         .unwrap();
 
-    let image_data: Vec<f32> = raster
-        .iter()
-        .map(|&height| height.unwrap_or(f32::NAN)) // Replace None with NaN
-        .collect();
 
     // Ensure we have the correct dimensions for the raster
     let expected_size = (raster_size as u32) * (raster_size as u32);
-    if image_data.len() as u32 != expected_size {
+    if raster.len() as u32 != expected_size {
         return Err(format!(
             "Raster size does not match expected dimensions: expected {}, found {}",
             expected_size,
-            image_data.len()
+            raster.len()
         )
         .into());
     }
     //image.rows_per_strip(2).unwrap();
 
     // Write the image data as Gray32Float
-    image.write_data(&image_data)?;
+    image.write_data(&raster)?;
     Ok(())
 }

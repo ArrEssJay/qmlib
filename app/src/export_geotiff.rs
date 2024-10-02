@@ -25,3 +25,23 @@ fn main() -> Result<(), String> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_write_tiff() {
+        // Assume you have a valid test tile path
+        let mut path: PathBuf = PathBuf::from(format!("{}/../test/terrain_data/a/15/59489/9692.terrain", env!("CARGO_MANIFEST_DIR")));       
+        let scale_shift: u16 = 4; 
+        let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path).unwrap();
+        path.set_extension(".test.tiff");
+        let result = tiff_writer::write_tiff(&tile, &path, scale_shift);
+        assert!(result.is_ok(), "Failed to write TIFF: {:?}", result.err());
+        
+        // Clean up test output
+        fs::remove_file(path).expect("Failed to clean up test output file");
+    }
+}

@@ -1,5 +1,4 @@
-
-use binrw::{prelude::*, BinRead, BinResult};
+use binrw::{BinRead, BinResult};
 use binrw::helpers::until_eof;
 use binrw::binread;
 use geometry::{lerp, ECEFPoint3};
