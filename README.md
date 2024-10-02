@@ -6,13 +6,13 @@ This is a native Rust implementation of tooling for the [Cesium Quantized-Mesh 1
 - **Binary Reading**: Partial reading of a single mesh tile (extensions are not yet handled, nor is writing).
 - **Georeferencing**: Converts local UVH coordinates to Geodetic LLH coordinates (WGS84 only).
 - **Exporting**: Outputs vector paths to SVG and KML formats.
-- **Rasterization**: Interpolates triangle faces to create a DEM (GeoTIFF).
+- **Multithreaded Rasterisation**: Interpolates elevation over triangle faces to create a DEM (GeoTIFF).
 
 Currently, reading of `layer.json` and the handling of gridded tile sets are not implemented. The tile loader enforces a WGS84 Geographic CRS with a TMS tiling structure for any loaded tile.
 
 Georeferencing parameters are derived from the `{z}`, `{y}`, `{x}.terrain` components of the supplied tile path in the tile loader.
 
-For performance, georeferencing and rasterization utilize `nalgebra` matrix methods, though there is likely room for optimization.
+For performance, georeferencing and rasterisation use `nalgebra` matrix methods, and the raster pipeline is multithreaded.
 
 ## Example Applications
 - `cargo run --bin tile_info <z/y/x.terrain>`: Prints out tile header and georeferencing data. Expects the tile to be located in a folder reflecting the TMS hierarchy.
