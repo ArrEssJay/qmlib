@@ -20,19 +20,6 @@ For performance, georeferencing and rasterisation use `nalgebra` matrix methods,
 - `cargo run --bin export_kml <z/y/x.terrain>`: Outputs KML with geodetic latitude, longitude, and height vertices and triangle edges.
 - `cargo run --bin export_geotiff <z/y/x.terrain> <scale shift>`: Outputs a GeoTIFF. Output resolution is determined by the scale shift parameter, right shifting vertex UV co-ordinates N bits. Spatial resolution will depend on the area covered by the tile.
 
-For the WGS84 Geographic case, approximate (equatorial) raster cell sizes (metres) at common TMS levels for a given output scale are shown here:
-
-| N |   X,Y Resolution | **TMS Levels** |              |              |              |              |              |              |              |              |              |               |               |               |               |               |               |               |               |               |               |
-|---|------------------|----------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|---------------|---------------|---------------|---------------|---------------|---------------|---------------|---------------|---------------|---------------|
-|   |                  | Level 0        | Level 1      | Level 2      | Level 3      | Level 4      | Level 5      | Level 6      | Level 7      | Level 8      | Level 9      | Level 10      | Level 11      | Level 12      | Level 13      | Level 14      | Level 15      | Level 16      | Level 17      | Level 18      | Level 19      | Level 20      |
-| 0 | 32768            | 156412.0       | 78206.0      | 39103.0      | 19551.5      | 9775.8       | 4887.9       | 2443.9       | 1221.9       | 610.9        | 305.4        | 152.7         | 76.4          | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
-| 1 | 16384            | 78206.0        | 39103.0      | 19551.5      | 9775.8       | 4887.9       | 2443.9       | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4          | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
-| 2 | 8192             | 39103.0        | 19551.5      | 9775.8       | 4887.9       | 2443.9       | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4         | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
-| 3 | 4096             | 19551.5        | 9775.8       | 4887.9       | 2443.9       | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4         | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
-| 4 | 2048             | 9775.8         | 4887.9       | 2443.9       | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4         | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
-| 5 | 1024             | 4887.9         | 2443.9       | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4         | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
-| 6 | 512              | 2443.9         | 1221.9       | 610.9        | 305.4        | 152.7        | 76.4         | 38.2          | 19.1          | 9.5           | 4.8           | 2.4           | 1.2           | 0.6           | 0.3           | 0.15          |
-
 ## Tests/Benchmarks
 - `cargo test` - Run tests
 - `cargo bench --release` - Run Criterion benchmarks with release optimisation flags
