@@ -3,3 +3,7 @@ members = [
     "app",
     "lib"
 ]
+
+[profile.release]
+# Optional: Optimize for release builds
+lto = true  # Link Time Optimization

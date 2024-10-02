@@ -2,40 +2,24 @@
 use binrw::{prelude::*, BinRead, BinResult};
 use binrw::helpers::until_eof;
 use binrw::binread;
-use geometry::{lerp, ECEFPoint3, Ellipsoid, GeodeticPoint2, GeodeticPoint3, GeodeticRectangle};
+use geometry::{lerp, ECEFPoint3};
 
 pub mod kml_writer;
 pub mod svg_writer;
-pub mod tile;
+pub mod quantized_mesh_tile;
 pub mod tiff_writer;
 pub mod geometry;
 pub mod raster;
-
 
 // Constants
 pub static UV_MAX_F64:f64 = 32767.0;
 pub static UV_MAX_U16:u16 = 32767;
 
-
-#[derive(Default)]
-pub enum Projection {
-    #[default]
-    Epsg4326 = 1,
-    Epsg3857 = 2,
-}
-
-#[derive(Debug, Default)]
-pub enum TilingScheme {
-    #[default]
-    Tms = 1,
-    Slippy = 2,
-}
-
-
-
+// Types
 pub type TriangleVertexIndex = [usize; 3];
 
 
+// Structs
 
 #[binread]
 #[derive(Debug)]
@@ -44,27 +28,6 @@ pub struct BoundingSphere {
     #[br(parse_with = parse_point3)]
     pub center: ECEFPoint3<f64>,
     pub radius: f64,
-}
-
-/// Convert WorldCRS84Quad tile to bounding box (lat/lon).
-/// Returns a LL/UR bounding box
-pub fn tile_to_bbox_crs84(x: u32, y: u32, z: u32) -> GeodeticRectangle<f64>{
-    let tiles_per_side = 2 << z; // 2 tiles at 0 level for WGS84
-    let tile_size_deg = 360.0 / tiles_per_side as f64; // Tile size in degrees
-
-    // Longitude bounds
-    let min_lon = x as f64 * tile_size_deg - 180.0;
-    let max_lon = (x as f64 + 1.0) * tile_size_deg - 180.0;
-
-    // Latitude boundssc
-    let min_lat = (y as f64) * tile_size_deg - 90.0;
-    let max_lat = (y as f64 + 1.0) * tile_size_deg - 90.0;
-
-
-    GeodeticRectangle {
-        lower_left: GeodeticPoint2::from_degrees(min_lon, min_lat),
-        upper_right: GeodeticPoint2::from_degrees(max_lon, max_lat),
-    }
 }
 
 // Quantized Mesh Binary Handling
@@ -119,21 +82,11 @@ pub struct QuantizedMeshHeader {
 #[derive(Debug)]
 #[br(little)]
 pub struct QuantizedMesh {
-    #[br(ignore)]
-    pub bounding_rectangle: GeodeticRectangle<f64>,
-
-    #[br(ignore)]
-    pub ellipsoid: Ellipsoid,
-
-    #[br(ignore)]
-    pub tiling_scheme: TilingScheme,
-
     pub header: QuantizedMeshHeader,
     pub vertex_data: VertexData,
 
     #[br(parse_with = until_eof)]
     pub extensions: Vec<Extension>,
-
 }
 
 impl QuantizedMesh {
@@ -141,48 +94,13 @@ impl QuantizedMesh {
         header: QuantizedMeshHeader,
         vertex_data: VertexData,
         extensions: Vec<Extension>,
-        bounding_rectangle: GeodeticRectangle<f64>,
-        ellipsoid: Ellipsoid,
-        tiling_scheme: TilingScheme,
+       
     ) -> Self {
         QuantizedMesh {
             header,
             vertex_data,
             extensions,
-            bounding_rectangle,
-            ellipsoid,
-            tiling_scheme,
         }
-    }
-
-    pub fn vertex_as_geodetic_point3(
-        &self,
-        vertex_index: usize,
-    ) -> GeodeticPoint3<f64> {
-        let u_value = self.vertex_data.u[vertex_index] as f64;
-        let v_value = self.vertex_data.v[vertex_index] as f64;
-        let height_value = self.vertex_data.height[vertex_index] as f64;
-
-        let ll = &self.bounding_rectangle.lower_left;
-        let ur  = &self.bounding_rectangle.upper_right;
-
-        let lat = lerp(ll.lon(), ur.lon(), &(u_value / UV_MAX_F64));
-        let lon = lerp(ll.lat(), ur.lat(), &(v_value / UV_MAX_F64));
-        let alt: f64 = lerp(&(self.header.min_height as f64), &(self.header.max_height as f64), &(height_value / UV_MAX_F64));
-
-        GeodeticPoint3::new(lat, lon, alt)
-    }
-
-    pub fn vertices_as_geodetic_point3(
-        &self,
-    ) -> Vec<GeodeticPoint3<f64>> {
-        let mut geodetic_coords = Vec::with_capacity(self.vertex_data.vertex_count as usize);
-        for i in 0..self.vertex_data.vertex_count as usize {
-            let lat_lon_height =
-                self.vertex_as_geodetic_point3(i);
-            geodetic_coords.push(lat_lon_height);
-        }
-        geodetic_coords
     }
 
     pub fn interpolated_height_vertices(

@@ -1,10 +1,10 @@
-use crate::geometry::GeodeticPoint3;
-use crate::QuantizedMesh;
+use crate::geometry::{GeodeticHeight, GeodeticLatLon, GeodeticPoint3};
+use crate::quantized_mesh_tile::QuantizedMeshTile;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 
-pub fn export_to_kml(qm: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
+pub fn write_kml(qmt: &QuantizedMeshTile, file_path: &Path) -> io::Result<()> {
     let mut kml_data = String::new();
 
     // KML Header
@@ -13,8 +13,8 @@ pub fn export_to_kml(qm: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
     kml_data.push_str(r#"<Document>"#);
 
     // Get index data
-    let index_data: &Vec<[usize; 3]> = &qm.vertex_data.triangle_index;
-    let vertices = &qm.vertices_as_geodetic_point3();
+    let index_data: &Vec<[usize; 3]> = &qmt.quantized_mesh.vertex_data.triangle_index;
+    let vertices = &qmt.vertices_as_geodetic_point3();
 
     // Loop through triangles and write to KML
     for (idx, triangle_indices) in index_data.iter().enumerate() {
@@ -38,7 +38,7 @@ pub fn export_to_kml(qm: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
                 "{},{},{}\n",
                 point.lon(),
                 point.lat(),
-                point.alt()
+                point.height()
             ));
         }
 
@@ -54,7 +54,7 @@ pub fn export_to_kml(qm: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
             "{},{},{}\n",
             vertex.lon(),
             vertex.lat(),
-            vertex.alt()
+            vertex.height()
         ));
         kml_data.push_str(r#"</coordinates></Point></Placemark>"#);
     }

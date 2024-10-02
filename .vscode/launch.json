@@ -4,15 +4,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'tile_export'",
+            "name": "Debug executable 'export_geotiff'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=tile_export",
+                    "--bin=export_geotiff",
                     "--package=qmlib_apps"
                 ],
                 "filter": {
-                    "name": "tile_export",
+                    "name": "export_geotiff",
                     "kind": "bin"
                 }
             },
@@ -22,16 +22,90 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'tile_export'",
+            "name": "Debug unit tests in executable 'export_geotiff'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=tile_export",
+                    "--bin=export_geotiff",
                     "--package=qmlib_apps"
                 ],
                 "filter": {
-                    "name": "tile_export",
+                    "name": "export_geotiff",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'export_kml'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=export_kml",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "export_kml",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'export_kml'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=export_kml",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "export_kml",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'export_svg'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=export_svg",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "export_svg",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'export_svg'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=export_svg",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "export_svg",
                     "kind": "bin"
                 }
             },
@@ -53,7 +127,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["./test/data/a/15/59489/9692.terrain"],
+            "args": [],
             "cwd": "${workspaceFolder}"
         },
         {

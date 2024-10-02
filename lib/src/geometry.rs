@@ -3,69 +3,30 @@ use std::clone::Clone;
 use std::cmp::PartialEq;
 use std::fmt::Debug;
 
-pub trait LatLon<T> {
+// cartesian and geodetic traits for nalgebra wrappers
+
+pub trait CartesianXY<T> {
+    fn x(&self) -> &T;
+    fn y(&self) -> &T;
+}
+
+pub trait CartesianZ<T>: CartesianXY<T> {
+    fn z(&self) -> &T;
+}
+pub trait GeodeticLatLon<T> {
     fn lat(&self) -> &T;
     fn lon(&self) -> &T;
 }
 
-pub trait LatLonAlt<T>: LatLon<T> {
-    fn alt(&self) -> &T;
+pub trait GeodeticHeight<T>: GeodeticLatLon<T> {
+    fn height(&self) -> &T;
 }
 
-// Implement LatLon for GeodeticPoint2
-impl<T> LatLon<T> for GeodeticPoint2<T>
-where
-    T: Copy + RealField,
-{
-    fn lat(&self) -> &T {
-        &self.0.y // Latitude is stored in y
-    }
+// nalgebra Wrappers
 
-    fn lon(&self) -> &T {
-        &self.0.x // Longitude is stored in x
-    }
-}
-
-// Implement LatLon for GeodeticPoint3
-impl<T> LatLon<T> for GeodeticPoint3<T>
-where
-    T: Copy + RealField,
-{
-    fn lat(&self) -> &T {
-        &self.0.y // Latitude is stored in y
-    }
-
-    fn lon(&self) -> &T {
-        &self.0.x // Longitude is stored in x
-    }
-}
-
-// Implement LatLon for GeodeticPoint2
-impl<T> LatLonAlt<T> for GeodeticPoint3<T>
-where
-    T: Copy + RealField,
-{
-    fn alt(&self) -> &T {
-        &self.0.z // Latitude is stored in y
-    }
-}
-
-// Define ECEFPoint3 as a wrapper around Point3<T>
+// ECEFPoint3
 #[derive(Debug)]
-
 pub struct ECEFPoint3<T>(pub Point3<T>)
-where
-    T: Copy + RealField;
-
-// Define GeodeticPoint3 as a wrapper around Point3<T>
-#[derive(Debug)]
-pub struct GeodeticPoint3<T>(pub Point3<T>)
-where
-    T: Copy + RealField;
-
-// Define GeodeticPoint2 as a wrapper around Point3<T>
-#[derive(Debug, Default)]
-pub struct GeodeticPoint2<T>(pub Point2<T>)
 where
     T: Copy + RealField;
 
@@ -79,35 +40,38 @@ where
     }
 
     pub fn to_geodetic(&self, ellipsoid: &Ellipsoid) -> GeodeticPoint3<T> {
-        let p = &self.0; // Access the inner Point3<T>
+        let x = self.x();
+        let y = self.y();
+        let z = self.z();
+
         let major = T::from_f64(ellipsoid.semi_major_axis).unwrap();
         let minor = T::from_f64(ellipsoid.semi_minor_axis).unwrap();
 
-        let r = (p.x * p.x + p.y * p.y + p.z * p.z).sqrt();
+        let r = (*x * *x + *y * *y + *z * *z).sqrt();
         let e = (major * major - minor * minor).sqrt();
         let var = r * r - e * e;
         let u = (T::from_f64(0.5).unwrap() * var
             + T::from_f64(0.5).unwrap()
-                * (var * var + T::from_f64(4.0).unwrap() * e * e * p.z * p.z).sqrt())
+                * (var * var + T::from_f64(4.0).unwrap() * e * e * *z * *z).sqrt())
         .sqrt();
 
-        let q = (p.x * p.x + p.y * p.y).sqrt();
+        let q = (*x * *x + *y * *y).sqrt();
         let hu_e = (u * u + e * e).sqrt();
-        let mut beta = (hu_e / u * p.z / q).atan();
+        let mut beta = (hu_e / u * *z / q).atan();
 
         let eps = ((minor * u - major * hu_e + e * e) * beta.sin())
             / (major * hu_e / beta.cos() - e * e * beta.cos());
         beta += eps;
 
         let lat = (major / minor * beta.tan()).atan();
-        let lon = p.y.atan2(p.x);
+        let lon = y.atan2(*x);
 
-        let v1 = p.z - minor * beta.sin();
+        let v1 = *z - minor * beta.sin();
         let v2 = q - major * beta.cos();
         let alt;
 
         let inside =
-            (p.x * p.x / major / major) + (p.y * p.y / major / major) + (p.z * p.z / minor / minor)
+            (*x * *x / major / major) + (*y * *y / major / major) + (*z * *z / minor / minor)
                 < T::one();
         if inside {
             alt = -(v1 * v1 + v2 * v2).sqrt();
@@ -119,7 +83,34 @@ where
     }
 }
 
-// Implement Geodetic for GeodeticPoint3
+impl<T> CartesianXY<T> for ECEFPoint3<T>
+where
+    T: Copy + RealField,
+{
+    fn x(&self) -> &T {
+        &self.0.x
+    }
+
+    fn y(&self) -> &T {
+        &self.0.y
+    }
+}
+
+impl<T> CartesianZ<T> for ECEFPoint3<T>
+where
+    T: Copy + RealField,
+{
+    fn z(&self) -> &T {
+        &self.0.x
+    }
+}
+
+//  GeodeticPoint3
+#[derive(Debug)]
+pub struct GeodeticPoint3<T>(pub Point3<T>)
+where
+    T: Copy + RealField;
+
 impl<T> GeodeticPoint3<T>
 where
     T: Copy + RealField,
@@ -138,28 +129,16 @@ where
     }
     pub fn to_degrees(&self) -> GeodeticPoint3<T> {
         GeodeticPoint3::new(
-            radians_to_degrees(self.0.x),
-            radians_to_degrees(self.0.y),
-            self.0.z,
+            radians_to_degrees(*self.lat()),
+            radians_to_degrees(*self.lon()),
+            *self.height(),
         )
     }
 
-    // Accessors for latitude, longitude, and altitude
-    pub fn lat(&self) -> &T {
-        &self.0.x // Latitude is stored in x
-    }
-
-    pub fn lon(&self) -> &T {
-        &self.0.y // Longitude is stored in y
-    }
-
-    pub fn alt(&self) -> &T {
-        &self.0.z // Altitude is stored in z
-    }
     pub fn to_ecef(&self, ellipsoid: &Ellipsoid) -> ECEFPoint3<T> {
-        let lat = &self.0.x; // Get latitude
-        let lon = &self.0.y; // Get longitude
-        let alt = &self.0.z; // Get altitude
+        let lat = self.lat();
+        let lon = self.lon();
+        let height = self.height();
 
         let a = T::from_f64(ellipsoid.semi_major_axis).unwrap();
         let b = T::from_f64(ellipsoid.semi_minor_axis).unwrap();
@@ -167,15 +146,42 @@ where
 
         let n = a / ((T::one() - e2 * lat.sin().powi(2)).sqrt()); // Radius of curvature in the prime vertical
 
-        let x = (n + alt.clone()) * lat.cos() * lon.cos();
-        let y = (n + alt.clone()) * lat.cos() * lon.sin();
-        let z = (n * (T::one() - e2) + alt.clone()) * lat.sin();
+        let x = (n + *height) * lat.cos() * lon.cos();
+        let y = (n + *height) * lat.cos() * lon.sin();
+        let z = (n * (T::one() - e2) + height.clone()) * lat.sin();
 
         ECEFPoint3(Point3::new(x, y, z))
     }
 }
 
-// Implement Geodetic for GeodeticPoint2
+impl<T> GeodeticLatLon<T> for GeodeticPoint3<T>
+where
+    T: Copy + RealField,
+{
+    fn lat(&self) -> &T {
+        &self.0.y
+    }
+
+    fn lon(&self) -> &T {
+        &self.0.x
+    }
+}
+
+impl<T> GeodeticHeight<T> for GeodeticPoint3<T>
+where
+    T: Copy + RealField,
+{
+    fn height(&self) -> &T {
+        &self.0.z
+    }
+}
+
+// GeodeticPoint2
+#[derive(Debug, Default)]
+pub struct GeodeticPoint2<T>(pub Point2<T>)
+where
+    T: Copy + RealField;
+
 impl<T> GeodeticPoint2<T>
 where
     T: Copy + RealField,
@@ -189,17 +195,27 @@ where
         GeodeticPoint2::new(degrees_to_radians(lat), degrees_to_radians(lon))
     }
     pub fn to_degrees(&self) -> GeodeticPoint2<T> {
-        GeodeticPoint2::new(radians_to_degrees(self.0.x), radians_to_degrees(self.0.y))
-    }
-    // Accessors for latitude, longitude, and altitude
-    pub fn lat(&self) -> &T {
-        &self.0.x // Latitude is stored in x
-    }
-
-    pub fn lon(&self) -> &T {
-        &self.0.y // Longitude is stored in y
+        GeodeticPoint2::new(
+            radians_to_degrees(*self.lat()),
+            radians_to_degrees(*self.lon()),
+        )
     }
 }
+
+impl<T> GeodeticLatLon<T> for GeodeticPoint2<T>
+where
+    T: Copy + RealField,
+{
+    fn lat(&self) -> &T {
+        &self.0.y
+    }
+
+    fn lon(&self) -> &T {
+        &self.0.x
+    }
+}
+
+// Polygons
 
 // Rectangle
 #[derive(Debug)]
@@ -219,6 +235,8 @@ where
     pub lower_left: GeodeticPoint2<T>,
     pub upper_right: GeodeticPoint2<T>,
 }
+
+// Triangle
 
 pub struct Triangle<T>
 where
@@ -273,14 +291,16 @@ impl Ellipsoid {
     /// Calculate the surface normal vector at the given ECEF position
     pub fn geodetic_surface_normal(&self, p: &ECEFPoint3<f64>) -> Vector3<f64> {
         let normal = Vector3::new(
-            p.0.x / (self.semi_major_axis * self.semi_major_axis),
-            p.0.y / (self.semi_major_axis * self.semi_major_axis),
-            p.0.z / (self.semi_minor_axis * (self.semi_minor_axis)),
+            p.x() / (self.semi_major_axis * self.semi_major_axis),
+            p.y() / (self.semi_major_axis * self.semi_major_axis),
+            p.z() / (self.semi_minor_axis * (self.semi_minor_axis)),
         );
         // Normalize the vector to get the unit normal
         normal.normalize()
     }
 }
+
+// Shared Functions
 
 /// Calculate the 4x4 ENU to ECEF rotation matrix for a given ECEF reference point
 pub fn calculate_enu_to_ecef_rotation_matrix(
@@ -288,7 +308,7 @@ pub fn calculate_enu_to_ecef_rotation_matrix(
     ellipsoid: &Ellipsoid,
 ) -> Matrix4<f64> {
     let up = ellipsoid.geodetic_surface_normal(&ecef_position);
-    let mut east: Vector3<f64> = Vector3::new(ecef_position.0.y, ecef_position.0.x, 0.0);
+    let mut east: Vector3<f64> = Vector3::new(*ecef_position.y(), *ecef_position.x(), 0.0);
     east.normalize_mut();
     let north = up.cross(&east).normalize();
 
@@ -305,9 +325,9 @@ pub fn calculate_enu_to_ecef_rotation_matrix(
         north.z,
         up.z,
         0.0,
-        ecef_position.0.x,
-        ecef_position.0.y,
-        ecef_position.0.z,
+        *ecef_position.x(),
+        *ecef_position.y(),
+        *ecef_position.z(),
         1.0,
     )
 }
@@ -316,6 +336,8 @@ pub fn calculate_enu_to_ecef_rotation_matrix(
 pub fn lerp(min_value: &f64, max_value: &f64, t: &f64) -> f64 {
     min_value + t * (max_value - min_value)
 }
+
+// Generic radians/degrees transformation
 
 fn radians_to_degrees<T>(radians: T) -> T
 where

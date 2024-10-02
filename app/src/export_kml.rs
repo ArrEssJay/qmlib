@@ -1,6 +1,6 @@
-use qmlib::{tile, tiff_writer};
-use std::path::PathBuf;
+use qmlib::{kml_writer, quantized_mesh_tile};
 use std::env;
+use std::path::PathBuf;
 use std::result::Result; // Use standard Result
 
 fn main() -> Result<(), String> {
@@ -15,13 +15,14 @@ fn main() -> Result<(), String> {
     let path: PathBuf = PathBuf::from(pathstr);
 
     // Load the QuantizedMesh
-    let tile = tile::load_quantized_mesh(&path)?;
+    let qmt = quantized_mesh_tile::load_quantized_mesh_tile(&path)?;
 
+    // Export to KML
     let mut outpath = path.clone();
-        
-    outpath.set_extension("tiff");
-    tiff_writer::export_to_tiff(&tile.quantized_mesh, &outpath, 4).map_err(|e| format!("Error exporting to KML: {}", e))?;
 
+    outpath.set_extension("kml");
+    kml_writer::write_kml(&qmt, &outpath)
+        .map_err(|e| format!("Error exporting to KML: {}", e))?;
 
     Ok(())
 }

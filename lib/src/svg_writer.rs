@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 
-pub fn export_to_svg(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
+pub fn write_svg(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Result<()> {
     let mut svg_data = String::new();
 
     // SVG Header

@@ -1,6 +1,6 @@
-use qmlib::{tile, kml_writer, svg_writer};
-use std::path::PathBuf;
+use qmlib::{svg_writer, quantized_mesh_tile};
 use std::env;
+use std::path::PathBuf;
 use std::result::Result; // Use standard Result
 
 fn main() -> Result<(), String> {
@@ -15,16 +15,14 @@ fn main() -> Result<(), String> {
     let path: PathBuf = PathBuf::from(pathstr);
 
     // Load the QuantizedMesh
-    let tile = tile::load_quantized_mesh(&path)?;
+    let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path)?;
 
     // Export to KML
     let mut outpath = path.clone();
-    
-    outpath.set_extension("kml");
-    kml_writer::export_to_kml(&tile.quantized_mesh, &outpath).map_err(|e| format!("Error exporting to KML: {}", e))?;
 
     outpath.set_extension("svg");
-    svg_writer::export_to_svg(&tile.quantized_mesh, &outpath).map_err(|e| format!("Error exporting to SVG: {}", e))?;
+    svg_writer::write_svg(&tile.quantized_mesh, &outpath)
+        .map_err(|e| format!("Error exporting to SVG: {}", e))?;
 
     Ok(())
 }
