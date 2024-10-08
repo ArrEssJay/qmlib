@@ -152,6 +152,25 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug benchmark 'bench_write_tiff'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=bench_write_tiff",
+                    "--package=qmlib_apps"
+                ],
+                "filter": {
+                    "name": "bench_write_tiff",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in library 'qmlib'",
             "cargo": {
                 "args": [

@@ -1,4 +1,4 @@
-use crate::geometry::{GeodeticHeight, GeodeticLatLon, GeodeticPoint3};
+use crate::geometry::GeodeticPoint3;
 use crate::quantized_mesh_tile::QuantizedMeshTile;
 use std::fs::File;
 use std::io::{self, Write};

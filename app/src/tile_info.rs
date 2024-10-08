@@ -49,8 +49,8 @@ fn main() -> Result<(), String> {
             )
             .transpose();
             let dist_enu = to_enu_matrix.transform_vector(
-                &(qmt.quantized_mesh.header.bounding_sphere.center.0
-                    - &qmt.quantized_mesh.header.center.0),
+                &(qmt.quantized_mesh.header.bounding_sphere.center
+                    - qmt.quantized_mesh.header.center),
             );
             println!(
                 "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",

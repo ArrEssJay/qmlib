@@ -1,11 +1,11 @@
 use binrw::BinRead;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{
     geometry::{
-        lerp, Ellipsoid, GeodeticLatLon, GeodeticPoint2, GeodeticPoint3, GeodeticRectangle,
+        lerp, Ellipsoid, GeodeticPoint2, GeodeticPoint3, GeodeticRectangle
     },
-    QuantizedMesh, UV_MAX_F64,
+    QuantizedMesh, UV_SIZE_F64,
 };
 
 use std::fs::File;
@@ -59,19 +59,19 @@ impl QuantizedMeshTile {
     }
 
     pub fn vertex_as_geodetic_point3(&self, vertex_index: usize) -> GeodeticPoint3<f64> {
-        let u_value = self.quantized_mesh.vertex_data.u[vertex_index] as f64;
-        let v_value = self.quantized_mesh.vertex_data.v[vertex_index] as f64;
-        let height_value = self.quantized_mesh.vertex_data.height[vertex_index] as f64;
+        let u_value = f64::from(self.quantized_mesh.vertex_data.u[vertex_index]);
+        let v_value = f64::from(self.quantized_mesh.vertex_data.v[vertex_index]);
+        let height_value = f64::from(self.quantized_mesh.vertex_data.height[vertex_index]);
 
         let ll = &self.bounding_rectangle.lower_left;
         let ur = &self.bounding_rectangle.upper_right;
 
-        let lat = lerp(ll.lon(), ur.lon(), &(u_value / UV_MAX_F64));
-        let lon = lerp(ll.lat(), ur.lat(), &(v_value / UV_MAX_F64));
+        let lat = lerp(ll.lon(), ur.lon(), &(u_value / (UV_SIZE_F64 -1.0)));
+        let lon = lerp(ll.lat(), ur.lat(), &(v_value /  (UV_SIZE_F64 -1.0)));
         let alt: f64 = lerp(
-            &(self.quantized_mesh.header.min_height as f64),
-            &(self.quantized_mesh.header.max_height as f64),
-            &(height_value / UV_MAX_F64),
+            &f64::from(self.quantized_mesh.header.min_height),
+            &f64::from(self.quantized_mesh.header.max_height),
+            &(height_value /  (UV_SIZE_F64 -1.0)),
         );
 
         GeodeticPoint3::new(lat, lon, alt)
@@ -88,7 +88,7 @@ impl QuantizedMeshTile {
     }
 }
 
-/// Convert WorldCRS84Quad tile to bounding box (lat/lon).
+/// Convert `WorldCRS84Quad` tile to bounding box (lat/lon).
 /// Returns a LL/UR bounding box
 pub fn tile_to_bounding_rectangle(
     crs: &CRS,
@@ -113,11 +113,11 @@ pub fn tile_to_bounding_rectangle(
             upper_right: GeodeticPoint2::from_degrees(max_lon, max_lat),
         })
     } else {
-        return Err(format!("Unsupported CRS {:?}", crs));
+        Err(format!("Unsupported CRS {:?}", crs))
     }
 }
 
-pub fn decode_tile_from_path(path: &PathBuf) -> Result<(usize, usize, usize), String> {
+pub fn decode_tile_from_path(path: &Path) -> Result<(usize, usize, usize), String> {
     // Extract the components from the path
     let components: Vec<&str> = path.iter().filter_map(|p| p.to_str()).collect();
 
@@ -149,13 +149,13 @@ pub fn decode_tile_from_path(path: &PathBuf) -> Result<(usize, usize, usize), St
 // TODO - Parse layer JSON and handle tile CRS parameters
 pub fn load_quantized_mesh_tile(path: &PathBuf) -> Result<QuantizedMeshTile, String> {
     // Decode zoom, x, y from the file path
-    let (decoded_zoom, decoded_x, decoded_y) = decode_tile_from_path(path).map_err(|e| e)?;
+    let (decoded_zoom, decoded_x, decoded_y) = decode_tile_from_path(path)?;
 
     let zoom = decoded_zoom as u32;
     let x = decoded_x as u32;
     let y = decoded_y as u32;
 
-    println!("Decoded tile params: zoom = {}, x = {}, y = {}", zoom, x, y);
+    println!("Decoded tile params: zoom = {zoom}, x = {x}, y = {y}");
 
     // Open the file
     let mut file =
@@ -163,7 +163,7 @@ pub fn load_quantized_mesh_tile(path: &PathBuf) -> Result<QuantizedMeshTile, Str
 
     // Read the QuantizedMesh
     let qm: QuantizedMesh = QuantizedMesh::read_le(&mut file)
-        .map_err(|e| format!("Failed to read quantized mesh: {:?}", e))?;
+        .map_err(|e| format!("Failed to read quantized mesh: {e:?}"))?;
 
     // TODO: Determine georeferencing parameters from layer.json
     let qmtile = QuantizedMeshTile::new(

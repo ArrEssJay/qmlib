@@ -1,7 +1,9 @@
+#![warn(clippy::style)]
+
 use binrw::{BinRead, BinResult};
 use binrw::helpers::until_eof;
 use binrw::binread;
-use geometry::{lerp, ECEFPoint3};
+use geometry::{lerp, CartesianPoint3};
 
 pub mod kml_writer;
 pub mod svg_writer;
@@ -9,10 +11,11 @@ pub mod quantized_mesh_tile;
 pub mod tiff_writer;
 pub mod geometry;
 pub mod raster;
+pub mod test_utils;
 
 // Constants
-pub static UV_MAX_F64:f64 = 32767.0;
-pub static UV_MAX_U16:u16 = 32767;
+pub static UV_SIZE_U16:u16 = 32768;
+pub static UV_SIZE_F64:f64 = 32768.0;
 
 // Types
 pub type TriangleVertexIndex = [usize; 3];
@@ -25,7 +28,7 @@ pub type TriangleVertexIndex = [usize; 3];
 #[br(little)]
 pub struct BoundingSphere {
     #[br(parse_with = parse_point3)]
-    pub center: ECEFPoint3<f64>,
+    pub center: CartesianPoint3<f64>,
     pub radius: f64,
 }
 
@@ -36,7 +39,7 @@ pub struct BoundingSphere {
 #[br(little)]
 pub struct QuantizedMeshHeader {
     #[br(parse_with = parse_point3)]
-    pub center: ECEFPoint3<f64>,
+    pub center: CartesianPoint3<f64>,
 
     pub min_height: f32,
 
@@ -45,7 +48,7 @@ pub struct QuantizedMeshHeader {
     pub bounding_sphere: BoundingSphere,
 
     #[br(parse_with = parse_point3)]
-    pub horizon_occlusion_point: ECEFPoint3<f64>,
+    pub horizon_occlusion_point: CartesianPoint3<f64>,
 }
 
 #[binread]
@@ -107,7 +110,7 @@ impl QuantizedMesh {
     ) -> Vec<f64> {
         let mut heights: Vec<f64> = Vec::with_capacity(self.vertex_data.vertex_count as usize);
         for i in 0..self.vertex_data.vertex_count as usize {
-            heights.push(lerp(&(self.header.min_height as f64), &(self.header.max_height as f64), &(self.vertex_data.height[i] as f64 / UV_MAX_F64)));
+            heights.push(lerp(&f64::from(self.header.min_height), &f64::from(self.header.max_height), &(f64::from(self.vertex_data.height[i]) /  (UV_SIZE_F64 - 1.0))));
         }
         heights
     }
@@ -165,8 +168,8 @@ pub struct Extension {
 }
 
 #[binrw::parser(reader, endian)]
-fn parse_point3() -> BinResult<ECEFPoint3<f64>> {
-    Ok(ECEFPoint3::new(
+fn parse_point3() -> BinResult<CartesianPoint3<f64>> {
+    Ok(CartesianPoint3::new(
         <_>::read_options(reader, endian, ())?,
         <_>::read_options(reader, endian, ())?,
         <_>::read_options(reader, endian, ())?,
@@ -203,6 +206,7 @@ pub fn vertex_vec_decode(count: u32) ->  binrw::BinResult<Vec<u16>> {
     for _ in 0..count {
         
         let n = u16::read_options(reader, endian, ())?;
+        #[allow(clippy::cast_possible_wrap)] // that's a feature
         let decoded = (n >>1 )as i16 ^ -((n  & 1) as i16);
         // Attempt to add decoded to val, checking for overflow
         
@@ -212,7 +216,7 @@ pub fn vertex_vec_decode(count: u32) ->  binrw::BinResult<Vec<u16>> {
     .ok_or_else(|| {
         binrw::Error::AssertFail {
             pos: reader.stream_position().unwrap(), // Include the stream position in the error
-            message: format!("Overflow occurred while decoding value: {}", decoded),
+            message: format!("Overflow occurred while decoding value: {decoded}"),
         }
     })?;
         
@@ -233,7 +237,7 @@ pub fn triangle_vec_decode(count: u32, long: bool) -> binrw::BinResult<Vec<[usiz
         // Initialize an array for the triangle
         let mut tri: TriangleVertexIndex = [0; 3];
 
-        for j in 0..3 {
+        for  vertex in &mut tri {
             let n: usize = if long {
                 u32::read_options(reader, endian, ())? as usize
             } else {
@@ -241,13 +245,12 @@ pub fn triangle_vec_decode(count: u32, long: bool) -> binrw::BinResult<Vec<[usiz
             };
 
             // bounds check
-            tri[j] = highest.checked_sub(n)
+            *vertex = highest.checked_sub(n)
             .ok_or_else(|| {
                 binrw::Error::AssertFail {
                     pos: reader.stream_position().unwrap(), // Include the stream position in the error
                     message: format!(
-                        "Invalid high watermark index encoding - highest: {} < value: {}",
-                        highest, n
+                        "Invalid high watermark index encoding - highest: {highest} < value: {n}"
                     ),
                 }
             })?;

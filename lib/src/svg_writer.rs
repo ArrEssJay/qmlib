@@ -16,23 +16,23 @@ pub fn write_svg(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Result
     let vertex_data: &VertexData = &quantized_mesh.vertex_data;
     let triangle_index = &vertex_data.triangle_index;
 
-    for (_triangle_index, indices) in triangle_index.iter().enumerate() {
-        let u0 = vertex_data.u[indices[0]];
-        let v0 = vertex_data.v[indices[0]];
+    for vertex in triangle_index {
+        let u0 = vertex_data.u[vertex[0]];
+        let v0 = vertex_data.v[vertex[0]];
 
-        let u1 = vertex_data.u[indices[1]];
-        let v1 = vertex_data.v[indices[1]];
+        let u1 = vertex_data.u[vertex[1]];
+        let v1 = vertex_data.v[vertex[1]];
 
-        let u2 = vertex_data.u[indices[2]];
-        let v2 = vertex_data.v[indices[2]];
+        let u2 = vertex_data.u[vertex[2]];
+        let v2 = vertex_data.v[vertex[2]];
         // Create SVG polygon element
         svg_data.push_str(r#"<polygon points=""#);
 
         // Collect points as a single string
-        let points: String = vec![
-            format!("{} {}", u0, v0),
-            format!("{} {}", u1, v1),
-            format!("{} {}", u2, v2),
+        let points: String = [
+            format!("{u0} {v0}"),
+            format!("{u1} {v1}"),
+            format!("{u2} {v2}"),
         ]
         .join(" "); // Join points with a space
 
@@ -43,7 +43,7 @@ pub fn write_svg(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Result
     }
 
     // SVG Footer
-    svg_data.push_str(r#"</svg>"#);
+    svg_data.push_str(r"</svg>");
 
     // Write to file
     let mut file = File::create(file_path)?;

@@ -20,7 +20,7 @@ fn main() -> Result<(), String> {
 
     // write to the same location
     outpath.set_extension("tiff");
-    tiff_writer::write_tiff(&tile, &outpath, scale_shift).map_err(|e| format!("Error exporting to KML: {}", e))?;
+    tiff_writer::write_tiff(&tile, &outpath, scale_shift).map_err(|e| format!("Error exporting to GeoTIFF: {}", e))?;
 
 
     Ok(())
