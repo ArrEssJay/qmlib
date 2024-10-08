@@ -19,28 +19,19 @@ nalgebra = "0.33.0"
 [[bin]]
 name = "tile_info"
 path = "src/tile_info.rs"
-args = [
-    "<path>",
-]
+
+[[bin]]
+name = "tiles_at_point"
+path = "src/tiles_at_point.rs"
 
 [[bin]]
 name = "export_kml"
 path = "src/export_kml.rs"
-args = [
-    "<path>",
-]
 
 [[bin]]
 name = "export_svg"
 path = "src/export_svg.rs"
-args = [
-    "<path>",
-]
 
 [[bin]]
 name = "export_geotiff"
 path = "src/export_geotiff.rs"
-args = [
-    "<path>",
-    "<N>", # bitwise n scale shift
-]
