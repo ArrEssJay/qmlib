@@ -170,11 +170,12 @@ pub fn tiles_for_point(
 
             // this assumes the point is in epsg4326, not projected mercator x/y
             CRS::Epsg3857 => {
+                let web_mercator_bound = 20037508.34;
                 let tiles_per_side: i32 = 1 << zoom; // 2^zoom
-                let mercator_x = lon * 20037508.34 / 180.0; // Convert lon to Web Mercator x
+                let mercator_x = lon * web_mercator_bound / 180.0; // Convert lon to Web Mercator x
                 let mercator_y = (lat.to_radians().tan().ln() / std::f64::consts::PI * 180.0).tan(); // Convert lat to Web Mercator y
                 let y = ((1.0 - mercator_y) / 2.0 * tiles_per_side as f64).floor() as u32;
-                let x = ((mercator_x + 20037508.34) / 256.0).floor() as u32; // Convert x to tile x
+                let x = ((mercator_x + web_mercator_bound) / 256.0).floor() as u32; // Convert x to tile x
                 (x, y)
             }
         };
