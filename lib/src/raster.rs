@@ -145,5 +145,21 @@ pub fn rasterise(qmt: &QuantizedMeshTile, scale_shift: u16) -> Vec<f32> {
         .iter() // Use `iter()` to borrow the values
         .map(|cell| f32::from_bits(cell.load(Ordering::Relaxed)))
         .collect();
+
+    // Check for NaN values and issue a warning
+    let mut nan_count = 0;    
+    for (i, &pixel) in image_data.iter().enumerate() {
+        if pixel.is_nan() {
+            let x = i % raster_dim_size;
+            let y = i / raster_dim_size;
+            println!("NaN found at position ({}, {})", x, y);
+            nan_count += 1;
+        }
+    }
+
+    if nan_count > 0 {
+        eprintln!("Warning: {} pixels in the image data are NaN.", nan_count);
+    }
+
     image_data
 }
