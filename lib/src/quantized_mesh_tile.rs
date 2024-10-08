@@ -119,7 +119,7 @@ pub fn tile_to_bounding_rectangle(
             let tile_size = web_mercator_bound * 2.0 / tiles_per_side as f64; // Tile size in meters
 
             // Longitude bounds in Web Mercator
-            let min_x = x as f64 * tile_size -web_mercator_bound;
+            let min_x = x as f64 * tile_size - web_mercator_bound;
             let max_x = (x as f64 + 1.0) * tile_size - web_mercator_bound;
 
             // Latitude bounds in Web Mercator
@@ -158,7 +158,6 @@ pub fn tiles_for_point(
     let (lat, lon) = (point.0.y, point.0.x); // Get latitude and longitude
     let mut tiles = Vec::new();
     for zoom in 0..=max_zoom {
-
         let (x, y) = match crs {
             CRS::Epsg4326 => {
                 let tiles_per_side: i32 = 2 << zoom; // 2 tiles at 0 level for WGS84
