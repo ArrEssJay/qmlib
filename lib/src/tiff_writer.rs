@@ -135,7 +135,7 @@ pub fn write_tiff(
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{interpolator::{self, interpolate_height_parametric}, test_utils::test_data::qmt_test_chess, tiff_writer::write_tiff};
+    use crate::{interpolator::{self, interpolate_height_edge}, test_utils::test_data::qmt_test_chess, tiff_writer::write_tiff};
 
     #[test]
     fn test_write_tiff() {
@@ -145,7 +145,7 @@ mod tests {
         let path: PathBuf = PathBuf::from("./test.tiff");       
 
         let scale_shift: u16 = 8; // Example scale_shift for rasterisation
-        let interpolator = interpolate_height_parametric; // fastest in my limited testing
+        let interpolator = interpolate_height_edge; // fastest in my limited testing
         let result = write_tiff(&mesh, &path, scale_shift, interpolator::InterpolationStrategy::Simple(interpolator));
 
         assert!(result.is_ok(), "TIFF generation failed: {result:?}");

@@ -2,8 +2,9 @@ use nalgebra::{Matrix2, Matrix3, Point2, Vector2, Vector3};
 
 use crate::geometry::Triangle;
 
-pub type Interpolator = fn(Point2<usize>, &Triangle<u16>, &[f64; 3]) -> Option<f32>;
-pub type PlaneInterpolator = fn(Point2<usize>, &Triangle<u16>, &[f64; 3], &Vector3<f64>) -> Option<f32>;
+pub type Interpolator = fn(Point2<u16>, &Triangle<u16>, &[f64; 3]) -> Option<f32>;
+pub type PlaneInterpolator =
+    fn(Point2<u16>, &Triangle<u16>, &[f64; 3], &Vector3<f64>) -> Option<f32>;
 pub type PlaneSolver = fn(&Triangle<u16>, &[f64; 3]) -> Option<Vector3<f64>>;
 
 pub enum InterpolationStrategy {
@@ -19,16 +20,21 @@ pub fn solve_plane_coefficients_lu(
     heights: &[f64; 3],
 ) -> Option<Vector3<f64>> {
     // Cast triangle vertices to f64 for precision
-    let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
-    let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
-    let v2 = Point2::new(triangle_u16.vertices[2].x as f64, triangle_u16.vertices[2].y as f64);
+    let v0 = Point2::new(
+        triangle_u16.vertices[0].x as f64,
+        triangle_u16.vertices[0].y as f64,
+    );
+    let v1 = Point2::new(
+        triangle_u16.vertices[1].x as f64,
+        triangle_u16.vertices[1].y as f64,
+    );
+    let v2 = Point2::new(
+        triangle_u16.vertices[2].x as f64,
+        triangle_u16.vertices[2].y as f64,
+    );
 
     // Create the matrix and vector for the system of equations
-    let a = Matrix3::new(
-        v0.x, v0.y, 1.0,
-        v1.x, v1.y, 1.0,
-        v2.x, v2.y, 1.0,
-    );
+    let a = Matrix3::new(v0.x, v0.y, 1.0, v1.x, v1.y, 1.0, v2.x, v2.y, 1.0);
     let b = Vector3::new(heights[0], heights[1], heights[2]);
 
     // Solve for the plane coefficients using LU decomposition
@@ -40,25 +46,29 @@ pub fn solve_plane_coefficients_qr(
     heights: &[f64; 3],
 ) -> Option<Vector3<f64>> {
     // Cast triangle vertices to f64 for precision
-    let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
-    let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
-    let v2 = Point2::new(triangle_u16.vertices[2].x as f64, triangle_u16.vertices[2].y as f64);
+    let v0 = Point2::new(
+        triangle_u16.vertices[0].x as f64,
+        triangle_u16.vertices[0].y as f64,
+    );
+    let v1 = Point2::new(
+        triangle_u16.vertices[1].x as f64,
+        triangle_u16.vertices[1].y as f64,
+    );
+    let v2 = Point2::new(
+        triangle_u16.vertices[2].x as f64,
+        triangle_u16.vertices[2].y as f64,
+    );
 
     // Create the matrix and vector for the system of equations
-    let a = Matrix3::new(
-        v0.x, v0.y, 1.0,
-        v1.x, v1.y, 1.0,
-        v2.x, v2.y, 1.0,
-    );
+    let a = Matrix3::new(v0.x, v0.y, 1.0, v1.x, v1.y, 1.0, v2.x, v2.y, 1.0);
     let b = Vector3::new(heights[0], heights[1], heights[2]);
 
     // Solve for the plane coefficients using LU decomposition
     a.lu().solve(&b)
 }
 
-
 pub fn interpolate_height_plane(
-    point_usize: Point2<usize>,
+    point_usize: Point2<u16>,
     triangle_u16: &Triangle<u16>,
     plane: &Vector3<f64>,
 ) -> Option<f32> {
@@ -66,7 +76,7 @@ pub fn interpolate_height_plane(
 }
 
 pub fn interpolate_height_plane_bounded(
-    point_usize: Point2<usize>,
+    point_usize: Point2<u16>,
     triangle_u16: &Triangle<u16>,
     plane: &Vector3<f64>,
     bounds_check: bool,
@@ -83,9 +93,18 @@ pub fn interpolate_height_plane_bounded(
 
     if bounds_check {
         // Solve for s and t using the inverse of the matrix formed by v1 - v0 and v2 - v0
-        let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
-        let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
-        let v2 = Point2::new(triangle_u16.vertices[2].x as f64, triangle_u16.vertices[2].y as f64);
+        let v0 = Point2::new(
+            triangle_u16.vertices[0].x as f64,
+            triangle_u16.vertices[0].y as f64,
+        );
+        let v1 = Point2::new(
+            triangle_u16.vertices[1].x as f64,
+            triangle_u16.vertices[1].y as f64,
+        );
+        let v2 = Point2::new(
+            triangle_u16.vertices[2].x as f64,
+            triangle_u16.vertices[2].y as f64,
+        );
 
         let v0v1 = v1 - v0;
         let v0v2 = v2 - v0;
@@ -113,57 +132,90 @@ pub fn interpolate_height_plane_bounded(
     }
 }
 
-pub fn interpolate_height_parametric(
-    point_usize: Point2<usize>,
-    triangle_u16: &Triangle<u16>,
+pub fn interpolate_height_edge(
+    sample_point: Point2<u16>,
+    triangle: &Triangle<u16>,
     heights: &[f64; 3],
 ) -> Option<f32> {
-    // Cast triangle vertices to f64 for precision
-    let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
-    let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
-    let v2 = Point2::new(triangle_u16.vertices[2].x as f64, triangle_u16.vertices[2].y as f64);
+    // Triangle vertices
 
-    // Cast point to f64
-    let point = Point2::new(point_usize.x as f64, point_usize.y as f64);
+    let mut v0x = triangle.vertices[0].x as i32;
+    let mut v0y = triangle.vertices[0].y as i32;
+    let v1x = triangle.vertices[1].x as i32;
+    let v1y = triangle.vertices[1].y as i32;
+    let mut v2x = triangle.vertices[2].x as i32;
+    let mut v2y = triangle.vertices[2].y as i32;
+    let px = sample_point.x as i32;
+    let py = sample_point.y as i32;
 
-    // Define vectors v and w
-    let v = Vector2::new(v1.x - v0.x, v1.y - v0.y);
-    let w = Vector2::new(v2.x - v0.x, v2.y - v0.y);
+     // Function to compute the edge function (signed area)
+     let edge_function = |v0x: i32, v0y: i32, v1x: i32, v1y: i32, px: i32, py: i32| -> i32 {
+        (px - v0x) * (v1y - v0y) - (py - v0y) * (v1x - v0x)
+    };
 
-    // Define the point relative to v0
-    let p = Vector2::new(point.x - v0.x, point.y - v0.y);
-
-    // Solve for s and t using the inverse of the matrix formed by v and w
-    let matrix = Matrix2::new(v.x, w.x, v.y, w.y);
-    if let Some(params) = matrix.try_inverse().map(|inv| inv * p) {
-        let s = params.x;
-        let t = params.y;
-
-        // Check if the point is inside the triangle
-        if s >= 0.0 && t >= 0.0 && s + t <= 1.0 {
-            // Interpolate the height
-            let z = (1.0 - s - t) * heights[0] + s * heights[1] + t * heights[2];
-            return Some(z as f32);
-        }
+    let is_ccw = |v0x: i32, v0y: i32, v1x: i32, v1y: i32, v2x: i32, v2y: i32| -> bool {
+        // Using the determinant to check orientation
+        ((v1x - v0x) * (v2y - v0y) - (v2x - v0x) * (v1y - v0y)) > 0
+    };
+    
+    if !is_ccw(v0x, v0y, v1x, v1y, v2x, v2y) {
+        let tx = v0x;
+        let ty = v0y;
+        v0x = v2x;
+        v0y = v2y;
+        v2x = tx;
+        v2y = ty;
     }
-    None
+
+    let w0 = edge_function(v0x, v0y, v1x, v1y, px, py);
+    let w1 = edge_function(v1x, v1y, v2x, v2y, px, py);
+    let w2 = edge_function(v2x, v2y, v0x, v0y, px, py);
+    
+    // Compute the full area of the triangle
+    let area_full = edge_function(v0x, v0y, v1x, v1y, v2x, v2y);
+
+    // If the area is zero, the triangle is degenerate
+    if area_full == 0 {
+        return None;
+    }
+
+    // Check if the point is inside the triangle (all weights must be non-negative)
+    if w0 >= 0 && w1 >= 0 && w2 >= 0 {
+        // Calculate barycentric coordinates (in integer math)
+        // Compute the weighted sum of heights without division
+        let numerator = w0  as f32 * heights[0] as f32 + w1 as f32 * heights[1] as f32 + w2 as f32 * heights[2] as f32;
+
+        // Interpolated height using scaled integer math (no division for lambda)
+        let interpolated_height = numerator / area_full as f32;
+
+        Some(interpolated_height)
+    } else {
+        None // Point is outside the triangle
+    }
 }
 
-
-
 pub fn interpolate_height_barycentric(
-    point_usize: Point2<usize>,
+    point_usize: Point2<u16>,
     triangle_u16: &Triangle<u16>,
     heights: &[f64; 3],
 ) -> Option<f32> {
     // Cast triangle to f64 for bounds checking precision
     // Cast triangle vertices to f64 for precision
-    let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
-    let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
-    let v2 = Point2::new(triangle_u16.vertices[2].x as f64, triangle_u16.vertices[2].y as f64);
+    let v0 = Point2::new(
+        triangle_u16.vertices[0].x as f64,
+        triangle_u16.vertices[0].y as f64,
+    );
+    let v1 = Point2::new(
+        triangle_u16.vertices[1].x as f64,
+        triangle_u16.vertices[1].y as f64,
+    );
+    let v2 = Point2::new(
+        triangle_u16.vertices[2].x as f64,
+        triangle_u16.vertices[2].y as f64,
+    );
 
-    let point: Point2<f64> = Point2::new(point_usize.x as f64, point_usize.y as f64);  
-   
+    let point: Point2<f64> = Point2::new(point_usize.x as f64, point_usize.y as f64);
+
     // Translate points so that v0 is the origin
     let p_prime = point - v0;
     let v1_prime = v1 - v0;
@@ -186,9 +238,8 @@ pub fn interpolate_height_barycentric(
             // Interpolate the height using the barycentric coordinates
             // Reduce precision to f32
             #[allow(clippy::cast_possible_truncation)]
-            let interpolated_height = (lambda0 * heights[0]
-                + lambda.x * heights[1] 
-                + lambda.y * heights[2] ) as f32;
+            let interpolated_height =
+                (lambda0 * heights[0] + lambda.x * heights[1] + lambda.y * heights[2]) as f32;
 
             Some(interpolated_height)
         } else {
@@ -208,11 +259,7 @@ mod tests {
     #[test]
     fn test_interpolate_height_qr_inside() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
@@ -224,104 +271,82 @@ mod tests {
     #[test]
     fn test_interpolate_height_qr_outside_bounded() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
         let plane = solve_plane_coefficients_qr(&triangle, &heights).unwrap();
-        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);        assert_eq!(result, None);
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);
+        assert_eq!(result, None);
     }
 
     #[test]
     fn test_interpolate_height_qr_outside_unbounded() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
         let plane = solve_plane_coefficients_qr(&triangle, &heights).unwrap();
-        let result = interpolate_height_plane_bounded(point, &triangle, &plane, false);       
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, false);
         assert_eq!(result, Some(45.0)); // note its outside but still calculcated
     }
 
     #[test]
-    fn test_interpolate_height_parametric_inside() {
+    fn test_interpolate_height_edge_inside() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(0, 10), Point2::new(10, 0)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
-        let result = interpolate_height_parametric(point, &triangle, &heights);
+        let result = interpolate_height_edge(point, &triangle, &heights);
         assert_eq!(result, Some(15.0));
     }
 
     #[test]
-    fn test_interpolate_height_parametric_outside() {
+    fn test_interpolate_height_edge_outside() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(10, 20), Point2::new(30, 40), Point2::new(50, 60)],
         };
-        let heights = [0.0, 10.0, 20.0];
-        let point = Point2::new(15, 15);
-        let result = interpolate_height_parametric(point, &triangle, &heights);
+        let heights = [100.0, 150.0, 200.0];
+        let point = Point2::new(25, 30);
+        let result = interpolate_height_edge(point, &triangle, &heights);
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_interpolate_height_lu_inside() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
-        let plane: nalgebra::Matrix<f64, nalgebra::Const<3>, nalgebra::Const<1>, nalgebra::ArrayStorage<f64, 3, 1>> = solve_plane_coefficients_lu(&triangle, &heights).unwrap();
-        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);        
+        let plane: nalgebra::Matrix<
+            f64,
+            nalgebra::Const<3>,
+            nalgebra::Const<1>,
+            nalgebra::ArrayStorage<f64, 3, 1>,
+        > = solve_plane_coefficients_lu(&triangle, &heights).unwrap();
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);
         assert_eq!(result, Some(15.0));
     }
 
     #[test]
     fn test_interpolate_height_lu_outside_bounded() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
         let plane = solve_plane_coefficients_lu(&triangle, &heights).unwrap();
-        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);    
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_interpolate_height_lu_outside_unbounded() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
@@ -333,11 +358,7 @@ mod tests {
     #[test]
     fn test_interpolate_height_barycentric_inside() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
@@ -348,11 +369,7 @@ mod tests {
     #[test]
     fn test_interpolate_height_barycentric_outside() {
         let triangle = Triangle {
-            vertices: [
-                Point2::new(0, 0),
-                Point2::new(10, 0),
-                Point2::new(0, 10),
-            ],
+            vertices: [Point2::new(0, 0), Point2::new(10, 0), Point2::new(0, 10)],
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);

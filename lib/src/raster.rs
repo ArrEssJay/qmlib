@@ -17,14 +17,14 @@ pub fn rasterise(
     strategy: InterpolationStrategy,
 ) -> Vec<f32>
 {       
-    let raster_dim_size:usize =  usize::from(raster_dim_pixels(scale_shift));
-    let raster_size = raster_dim_size  * raster_dim_size ;
+    let raster_dim_size:u16 =  raster_dim_pixels(scale_shift);
+    let raster_size: u32 = raster_dim_size as u32 * raster_dim_size as u32 ;
     let v = &qmt.quantized_mesh.vertex_data;
     let heights = &qmt.quantized_mesh.interpolated_height_vertices();
 
     // Store F32 in AtomicU32 using F32 bit patterns
     // Initialise with NAN so we can test whether a cell has already been written
-    let raster: Vec<AtomicU32> = (0..raster_size as usize)
+    let raster: Vec<AtomicU32> = (0..raster_size)
     .map(|_| AtomicU32::new(f32::NAN.to_bits()))
     .collect();
 
@@ -62,13 +62,13 @@ pub fn rasterise(
         let triangle_bounds = triangle.bounding_rect();
         
         // To reset the scanline x each row
-        let raster_x_origin = triangle_bounds.lower_left.x as usize;
+        let raster_x_origin = triangle_bounds.lower_left.x;
         
         // Invert y-axis by subtracting raster_point.y from raster_dim_size - 1
-        let raster_y = (raster_dim_size - 1) - (triangle_bounds.lower_left.y as usize);
+        let raster_y = (raster_dim_size - 1) - (triangle_bounds.lower_left.y );
 
         // Build 2D point as its needed for vector math in the triangle rasteriser
-        let mut raster_point:Point2<usize> = Point2::new(raster_x_origin,raster_y);
+        let mut raster_point:Point2<u16> = Point2::new(raster_x_origin,raster_y);
         
         // NaN bit pattern
         let f32_bits_nan = f32::to_bits(f32::NAN);
@@ -85,10 +85,10 @@ pub fn rasterise(
             for _ in 0..(triangle_bounds.upper_right.x -triangle_bounds.lower_left.x)
             {   
                 // index in the flat raster
-                let raster_idx = (raster_y * raster_dim_size) + raster_point.x;
+                let raster_idx = (raster_y as u32 * raster_dim_size as u32) + raster_point.x as u32;
             
                 // Check if the raster cell is empty by reading the atomic value without locking
-                let cell = &raster[raster_idx];
+                let cell = &raster[raster_idx as usize];
                 if cell.load(Ordering::Relaxed) == f32_bits_nan {
                     if let Some(interpolated_height) = match &strategy {
                         InterpolationStrategy::Simple(interpolator) => {
@@ -129,8 +129,8 @@ pub fn rasterise(
         let mut nan_count = 0;    
         for (i, &pixel) in image_data.iter().enumerate() {
             if pixel.is_nan() {
-                let x = i % raster_dim_size;
-                let y = i / raster_dim_size;
+                let x = i % raster_dim_size as usize;
+                let y = i / raster_dim_size as usize;
                 eprintln!("NaN found at position ({}, {})", x, y);
                 nan_count += 1;
             }

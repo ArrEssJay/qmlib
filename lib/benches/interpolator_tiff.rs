@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use qmlib::{interpolator::{ interpolate_height_barycentric, interpolate_height_plane, solve_plane_coefficients_lu, solve_plane_coefficients_qr, Interpolator, PlaneInterpolator, PlaneSolver}, quantized_mesh_tile, tiff_writer::write_tiff};
+use qmlib::{interpolator::{ interpolate_height_barycentric, interpolate_height_edge, Interpolator}, quantized_mesh_tile, tiff_writer::write_tiff};
 use qmlib::interpolator::InterpolationStrategy;
 
 fn benchmark(c: &mut Criterion) { 
@@ -15,14 +15,14 @@ fn benchmark(c: &mut Criterion) {
     let output_path = path.with_extension("bench.tiff");
 
      // Define the plane-based interpolator and solver
-     let plane_interpolator: PlaneInterpolator = |point, triangle, _heights, plane| {
-        interpolate_height_plane(point, triangle, plane)
-    };
-    let lu_plane_solver: PlaneSolver = solve_plane_coefficients_lu;
-    let qr_plane_solver: PlaneSolver = solve_plane_coefficients_qr;
+    //  let plane_interpolator: PlaneInterpolator = |point, triangle, _heights, plane| {
+    //     interpolate_height_plane(point, triangle, plane)
+    // };
+    // let lu_plane_solver: PlaneSolver = solve_plane_coefficients_lu;
+    // let qr_plane_solver: PlaneSolver = solve_plane_coefficients_qr;
 
     let barycentric_interpolator: Interpolator = interpolate_height_barycentric;
-    let parametric_interpolator: Interpolator = interpolate_height_barycentric;
+    let edge_interpolator: Interpolator = interpolate_height_edge;
 
     c.bench_function("write_tiff_barycentric", |b| {
         b.iter(|| {
@@ -35,44 +35,44 @@ fn benchmark(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("write_tiff_parametric", |b| {
+    c.bench_function("write_tiff_edge", |b| {
         b.iter(|| {
             write_tiff(
                 &tile,
                 &output_path,
                 scale_shift,
-                InterpolationStrategy::Simple(parametric_interpolator),
+                InterpolationStrategy::Simple(edge_interpolator),
             ).unwrap();
         })
     });
 
-    c.bench_function("write_tiff_qr_bounded", |b| {
-        b.iter(|| {
-            write_tiff(
-                &tile,
-                &output_path,
-                scale_shift,
-                InterpolationStrategy::PlaneBased {
-                    plane_interpolator,
-                    plane_solver:qr_plane_solver,
-                },
-            ).unwrap();
-        })
-    });
+    // c.bench_function("write_tiff_qr_bounded", |b| {
+    //     b.iter(|| {
+    //         write_tiff(
+    //             &tile,
+    //             &output_path,
+    //             scale_shift,
+    //             InterpolationStrategy::PlaneBased {
+    //                 plane_interpolator,
+    //                 plane_solver:qr_plane_solver,
+    //             },
+    //         ).unwrap();
+    //     })
+    // });
 
-    c.bench_function("write_tiff_lu_bounded", |b| {
-        b.iter(|| {
-            write_tiff(
-                &tile,
-                &output_path,
-                scale_shift,
-                InterpolationStrategy::PlaneBased {
-                    plane_interpolator,
-                    plane_solver:lu_plane_solver,
-                },
-            ).unwrap();
-        })
-    });
+    // c.bench_function("write_tiff_lu_bounded", |b| {
+    //     b.iter(|| {
+    //         write_tiff(
+    //             &tile,
+    //             &output_path,
+    //             scale_shift,
+    //             InterpolationStrategy::PlaneBased {
+    //                 plane_interpolator,
+    //                 plane_solver:lu_plane_solver,
+    //             },
+    //         ).unwrap();
+    //     })
+    // });
 
     // Clean up test output
     fs::remove_file(output_path).expect("Failed to clean up test output file");
