@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use nalgebra::Point2;
-use qmlib::{geometry::Triangle, interpolator::{interpolate_height_barycentric, interpolate_height_lu, interpolate_height_parametric}};
+use qmlib::{geometry::Triangle, interpolator::{interpolate_height_barycentric, interpolate_height_lu_bounded, interpolate_height_parametric, interpolate_height_qr_bounded}};
 
 fn benchmark(c: &mut Criterion) {
    
@@ -28,10 +28,34 @@ fn benchmark(c: &mut Criterion) {
             })
         });
     
-        c.bench_function("interpolate_height_lu", |b| {
+        c.bench_function("interpolate_height_lu_bounded", |b| {
             b.iter(|| {
                 for point in &points {
-                    let _ = interpolate_height_lu(*point, &triangle_u16, &heights, true); // Set bounds_check to true
+                    let _ = interpolate_height_lu_bounded(*point, &triangle_u16, &heights, true); // Set bounds_check to true
+                }
+            })
+        });
+
+        c.bench_function("interpolate_height_qr_bounded", |b| {
+            b.iter(|| {
+                for point in &points {
+                    let _ = interpolate_height_qr_bounded(*point, &triangle_u16, &heights, true); // Set bounds_check to true
+                }
+            })
+        });
+
+        c.bench_function("interpolate_height_lu_unbounded", |b| {
+            b.iter(|| {
+                for point in &points {
+                    let _ = interpolate_height_lu_bounded(*point, &triangle_u16, &heights, false); // Set bounds_check to true
+                }
+            })
+        });
+
+        c.bench_function("interpolate_height_qr_unbounded", |b| {
+            b.iter(|| {
+                for point in &points {
+                    let _ = interpolate_height_qr_bounded(*point, &triangle_u16, &heights, false); // Set bounds_check to true
                 }
             })
         });

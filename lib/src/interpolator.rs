@@ -8,6 +8,14 @@ pub fn interpolate_height_lu(
     point_usize: Point2<usize>,
     triangle_u16: &Triangle<u16>,
     heights: &[f64; 3],
+) -> Option<f32> {
+    interpolate_height_lu_bounded(point_usize, triangle_u16, heights, true)
+}
+
+pub fn interpolate_height_lu_bounded(
+    point_usize: Point2<usize>,
+    triangle_u16: &Triangle<u16>,
+    heights: &[f64; 3],
     bounds_check: bool,
 ) -> Option<f32> {
     // Cast triangle vertices to f64 for precision
@@ -68,6 +76,14 @@ pub fn interpolate_height_lu(
 }
 
 pub fn interpolate_height_qr(
+    point_usize: Point2<usize>,
+    triangle_u16: &Triangle<u16>,
+    heights: &[f64; 3],
+) -> Option<f32> {
+    interpolate_height_qr_bounded(point_usize, triangle_u16, heights, true)
+}
+
+pub fn interpolate_height_qr_bounded(
     point_usize: Point2<usize>,
     triangle_u16: &Triangle<u16>,
     heights: &[f64; 3],
@@ -233,7 +249,7 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
-        let result = interpolate_height_qr(point, &triangle, &heights, true);
+        let result = interpolate_height_qr_bounded(point, &triangle, &heights, true);
         assert_eq!(result, Some(15.0));
     }
 
@@ -248,7 +264,7 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_qr(point, &triangle, &heights, true);
+        let result = interpolate_height_qr_bounded(point, &triangle, &heights, true);
         assert_eq!(result, None);
     }
 
@@ -263,7 +279,7 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_qr(point, &triangle, &heights, false);
+        let result = interpolate_height_qr_bounded(point, &triangle, &heights, false);
         assert_eq!(result, Some(45.0)); // note its outside but still calculcated
     }
 
@@ -308,7 +324,7 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
-        let result = interpolate_height_lu(point, &triangle, &heights, true);
+        let result = interpolate_height_lu_bounded(point, &triangle, &heights, true);
         assert_eq!(result, Some(15.0));
     }
 
@@ -323,7 +339,7 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_lu(point, &triangle, &heights, true);
+        let result = interpolate_height_lu_bounded(point, &triangle, &heights, true);
         assert_eq!(result, None);
     }
 
@@ -338,7 +354,7 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_lu(point, &triangle, &heights, false);
+        let result = interpolate_height_lu_bounded(point, &triangle, &heights, false);
         assert_eq!(result, Some(45.0)); // note its outside but still calculcated
     }
 

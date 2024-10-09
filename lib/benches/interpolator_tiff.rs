@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use qmlib::{interpolator::{interpolate_height_barycentric, interpolate_height_lu, interpolate_height_parametric}, quantized_mesh_tile, tiff_writer::write_tiff};
+use qmlib::{interpolator::{interpolate_height_barycentric, interpolate_height_lu_bounded, interpolate_height_parametric}, quantized_mesh_tile, tiff_writer::write_tiff};
 
 fn benchmark(c: &mut Criterion) {
     let path: PathBuf = PathBuf::from(format!("{}/../test/terrain_data/a/15/59489/9692.terrain", env!("CARGO_MANIFEST_DIR")));
@@ -25,10 +25,34 @@ fn benchmark(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("write_tiff_lu", |b| {
+    c.bench_function("write_tiff_qr_bounded", |b| {
         b.iter(|| {
             write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
-                interpolate_height_lu(point, triangle, heights, true) // Set bounds_check to true
+                interpolate_height_lu_bounded(point, triangle, heights, true) // Set bounds_check to true
+            }).unwrap();
+        })
+    });
+
+    c.bench_function("write_tiff_qr_unbounded", |b| {
+        b.iter(|| {
+            write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
+                interpolate_height_lu_bounded(point, triangle, heights, false) // Set bounds_check to true
+            }).unwrap();
+        })
+    });
+
+    c.bench_function("write_tiff_lu_bounded", |b| {
+        b.iter(|| {
+            write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
+                interpolate_height_lu_bounded(point, triangle, heights, true) // Set bounds_check to true
+            }).unwrap();
+        })
+    });
+
+    c.bench_function("write_tiff_lu_unbounded", |b| {
+        b.iter(|| {
+            write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
+                interpolate_height_lu_bounded(point, triangle, heights, false) // Set bounds_check to true
             }).unwrap();
         })
     });
