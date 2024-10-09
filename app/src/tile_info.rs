@@ -2,6 +2,7 @@ use core::str;
 use std::env;
 use std::path::PathBuf;
 use std::result::Result;
+use geo::{Coord, GeodesicArea, LineString, Polygon};
 
 use qmlib::geometry::calculate_enu_to_ecef_rotation_matrix;
 use qmlib::quantized_mesh_tile;
@@ -32,6 +33,11 @@ fn main() -> Result<(), String> {
                 qmt.quantized_mesh.header.center
             );
 
+            // Determine tile centre (ellipsoid height) 
+            // and bounding sphere centre offset
+            // For validation these should be a distance vertically
+            // approximately equal to the average tile height 
+
             let centre_geodetic = qmt
                 .quantized_mesh
                 .header
@@ -56,8 +62,33 @@ fn main() -> Result<(), String> {
                 "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",
                 dist_enu
             );
+            
+            let br = qmt.bounding_rectangle;
+            let min_x = br.lower_left.0.x;
+            let max_x = br.upper_right.0.x;
+            let min_y = br.lower_left.0.y;
+            let max_y = br.upper_right.0.y;
+
+            let exterior = LineString::from(vec![
+                Coord { x: min_x, y: min_y },
+                Coord { x: min_x, y: max_y },
+                Coord { x: max_x, y: max_y },
+                Coord { x: max_x, y: min_y },
+
+            ]);
+            
+            // Determine the tile area
+            let polygon = Polygon::new(
+                exterior,
+                vec![],
+            ); 
+
+            let area = polygon.geodesic_area_unsigned();
+            let formatted_area = format!("{:.2e}", area);
+            println!("\n Bounding Rectangle Area: {formatted_area}m²");
 
             println!("\nVertex Array: count => [min:max] ");
+            
             println!(
                 "Vertex (U): {:#?} => [{:#?}:{:#?}]",
                 qmt.quantized_mesh.vertex_data.u.len(),

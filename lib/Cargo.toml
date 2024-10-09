@@ -18,3 +18,11 @@ tiff = "0.9.1"
 name = "qmlib"
 path = "src/quantized_mesh.rs"
 crate-type = ["cdylib", "rlib"]
+
+[[bench]]
+name = "interpolator_tiff"
+harness = false
+
+[[bench]]
+name = "interpolator"
+harness = false

@@ -1,71 +1,17 @@
 use std::sync::{atomic::{AtomicU32, Ordering}, Arc};
 
-use nalgebra::{ Matrix2, Point2};
+use nalgebra:: Point2;
 use rayon::prelude::*;
 
-use crate::{geometry::Triangle, quantized_mesh_tile::QuantizedMeshTile, UV_SIZE_U16};
+use crate::{geometry::Triangle, interpolator::Interpolator, quantized_mesh_tile::QuantizedMeshTile, UV_SIZE_U16};
+
+
 
 pub fn raster_dim_pixels(scale_shift: u16) -> u16 {
     UV_SIZE_U16 >> scale_shift
 }
 
-pub fn interpolate_triangle_face_height(
-    point_usize: Point2<usize>,
-    triangle_u16: &Triangle<u16>,
-    heights: &[f64; 3],
-) -> Option<f32> {
-
-    // Cast triangle to f64 for bounds checking precision
-    let triangle: Triangle<f64> = Triangle {
-        vertices: triangle_u16.vertices.map(|vertex| {
-            Point2::new(vertex.x as f64, vertex.y as f64)
-        })
-    };
-
-    let point:Point2<f64> = Point2::new(point_usize.x as f64, point_usize.y as f64);  
-    let v0 = triangle.vertices[0];
-    let v1 = triangle.vertices[1];
-    let v2 = triangle.vertices[2];
-
-    // Translate points so that v0 is the origin
-    let p_prime = point - v0;
-    let v1_prime = v1 - v0;
-    let v2_prime = v2 - v0;
-
-    // Create the 2x2 matrix A with v1_prime and v2_prime as columns
-    let a = Matrix2::new(v1_prime.x, v2_prime.x, v1_prime.y, v2_prime.y);
-
-    // Check if the matrix is invertible (non-zero determinant)
-    if let Some(a_inv) = a.try_inverse() {
-        // Solve for lambda1 and lambda2
-        let lambda = a_inv * p_prime;
-
-        // Calculate lambda0
-        let lambda0 = 1.0 - lambda.x - lambda.y;
-
-        // Ensure that the barycentric coordinates are valid (inside the triangle)
-        // Add a small epsilon threshold to account for floating-point precision errors.
-        if lambda0 >= -f64::EPSILON && lambda.x >= -f64::EPSILON && lambda.y >= -f64::EPSILON {
-            // Interpolate the height using the barycentric coordinates
-            // Reduce precision to f32
-            #[allow(clippy::cast_possible_truncation)]
-            let interpolated_height = (lambda0 * heights[0]
-                + lambda.x * heights[1] 
-                + lambda.y * heights[2] ) as f32;
-
-            Some(interpolated_height)
-        } else {
-            // The point is outside the triangle
-            None
-        }
-    } else {
-        // The triangle is degenerate (area is zero), no solution
-        None
-    }
-}
-
-
-pub fn rasterise(qmt: &QuantizedMeshTile, scale_shift: u16) -> Vec<f32> {
+pub fn rasterise(qmt: &QuantizedMeshTile, scale_shift: u16,  interpolator: Interpolator) -> Vec<f32> {
        
     let raster_dim_size:usize =  usize::from(raster_dim_pixels(scale_shift));
     let raster_size = raster_dim_size  * raster_dim_size ;
@@ -135,7 +81,7 @@ pub fn rasterise(qmt: &QuantizedMeshTile, scale_shift: u16) -> Vec<f32> {
                 let cell = &raster[raster_idx];
                 if cell.load(Ordering::Relaxed) == f32_bits_nan {
                     if let Some(interpolated_height) =
-                        interpolate_triangle_face_height(raster_point, &triangle, &tri_heights)
+                        interpolator(raster_point, &triangle, &tri_heights)
                     {
                         // Try to write the value if the cell is still "empty" (contains NaN)
                         cell.store(interpolated_height.to_bits(), Ordering::Relaxed);

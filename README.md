@@ -14,6 +14,12 @@ Georeferencing parameters are derived from the `{z}`, `{y}`, `{x}.terrain` compo
 
 For performance, georeferencing and rasterisation use `nalgebra` matrix methods, and the raster pipeline is multithreaded.
 
+Local generic implementations of 2D/3D points are used in the core library for performance reasons. The mesh format makes significant use of integer types. For rasterisation and rendering it is useful to avoid the penalty of converting to/from floating point, which is demanded by the various geodesic/geographic crates.
+
+`geographiclib-rs` is used in `tile_info` for calculating geodesic area of the tile and ecef/geodesic conversion, neither of which are relevant to performance.
+
+
+
 ## Example Applications
 - `cargo run --bin tile_info <z/y/x.terrain>`: Prints out tile header and georeferencing data. Expects the tile to be located in a folder reflecting the TMS hierarchy.
 - `cargo run --bin export_svg <z/y/x.terrain>`: Outputs SVG with unreferenced UV vertices and triangle edges.

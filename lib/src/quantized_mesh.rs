@@ -11,6 +11,8 @@ pub mod quantized_mesh_tile;
 pub mod tiff_writer;
 pub mod geometry;
 pub mod raster;
+pub mod interpolator;
+
 pub mod test_utils;
 
 // Constants

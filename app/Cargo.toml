@@ -7,10 +7,6 @@ edition = "2021"
 [dev-dependencies]
 criterion = "0.5.1"
 
-[[bench]]
-name = "bench_write_tiff"
-harness = false
-
 [dependencies]
 qmlib = { path = "../lib" }  # Local path to the library
 binrw = "0.14.0"
@@ -35,3 +31,11 @@ path = "src/export_svg.rs"
 [[bin]]
 name = "export_geotiff"
 path = "src/export_geotiff.rs"
+
+#[[bin]]
+#name = "compute_shader"
+#path = "src/compute_shader.rs"
+
+#[[bin]]
+#name = "render_tile"
+#path = "src/render_tile.rs"

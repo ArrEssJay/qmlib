@@ -5,17 +5,17 @@ use tiff::{
 };
 
 use crate::{
-    quantized_mesh_tile::{QuantizedMeshTile, CRS},
-    raster::{raster_dim_pixels, rasterise},
+    interpolator::Interpolator, quantized_mesh_tile::{QuantizedMeshTile, CRS}, raster::{raster_dim_pixels, rasterise}
 };
 
 pub fn write_tiff(
     qmt: &QuantizedMeshTile,
     filename: &Path,
     scale_shift: u16,
+    interpolator: Interpolator,
 ) -> Result<(), Box<dyn Error>> {
     let raster_size = raster_dim_pixels(scale_shift);
-    let raster = rasterise(qmt, scale_shift);
+    let raster = rasterise(qmt, scale_shift, interpolator);
 
     let mut tiff: TiffEncoder<File> = TiffEncoder::new(File::create(filename)?)?;
     let mut image = tiff
@@ -131,7 +131,7 @@ pub fn write_tiff(
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{test_utils::test_data::qmt_test_chess, tiff_writer::write_tiff};
+    use crate::{interpolator::interpolate_height_barycentric, test_utils::test_data::qmt_test_chess, tiff_writer::write_tiff};
 
     #[test]
     fn test_write_tiff() {
@@ -141,8 +141,8 @@ mod tests {
         let path: PathBuf = PathBuf::from("./test.tiff");       
 
         let scale_shift: u16 = 8; // Example scale_shift for rasterisation
-
-        let result = write_tiff(&mesh, &path, scale_shift);
+        let interpolator = interpolate_height_barycentric;
+        let result = write_tiff(&mesh, &path, scale_shift, interpolator);
 
         assert!(result.is_ok(), "TIFF generation failed: {result:?}");
     }
