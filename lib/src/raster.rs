@@ -3,7 +3,7 @@ use std::sync::{atomic::{AtomicU32, Ordering}, Arc};
 use nalgebra:: Point2;
 use rayon::prelude::*;
 
-use crate::{geometry::Triangle, interpolator::Interpolator, quantized_mesh_tile::QuantizedMeshTile, UV_SIZE_U16};
+use crate::{geometry::Triangle, interpolator::InterpolationStrategy, quantized_mesh_tile::QuantizedMeshTile, UV_SIZE_U16};
 
 
 
@@ -11,8 +11,12 @@ pub fn raster_dim_pixels(scale_shift: u16) -> u16 {
     UV_SIZE_U16 >> scale_shift
 }
 
-pub fn rasterise(qmt: &QuantizedMeshTile, scale_shift: u16,  interpolator: Interpolator) -> Vec<f32> {
-       
+pub fn rasterise(
+    qmt: &QuantizedMeshTile,
+    scale_shift: u16,
+    strategy: InterpolationStrategy,
+) -> Vec<f32>
+{       
     let raster_dim_size:usize =  usize::from(raster_dim_pixels(scale_shift));
     let raster_size = raster_dim_size  * raster_dim_size ;
     let v = &qmt.quantized_mesh.vertex_data;
@@ -69,6 +73,12 @@ pub fn rasterise(qmt: &QuantizedMeshTile, scale_shift: u16,  interpolator: Inter
         // NaN bit pattern
         let f32_bits_nan = f32::to_bits(f32::NAN);
 
+        let plane = if let InterpolationStrategy::PlaneBased { plane_solver, .. } = &strategy {
+            plane_solver(&triangle, &tri_heights)
+        } else {
+            None
+        };
+
         for _ in 0..(triangle_bounds.upper_right.y -triangle_bounds.lower_left.y) // range is inclusive..exclusive
         {
             raster_point.x = raster_x_origin; // reset scanline x each row
@@ -80,12 +90,24 @@ pub fn rasterise(qmt: &QuantizedMeshTile, scale_shift: u16,  interpolator: Inter
                 // Check if the raster cell is empty by reading the atomic value without locking
                 let cell = &raster[raster_idx];
                 if cell.load(Ordering::Relaxed) == f32_bits_nan {
-                    if let Some(interpolated_height) =
-                        interpolator(raster_point, &triangle, &tri_heights)
-                    {
+                    if let Some(interpolated_height) = match &strategy {
+                        InterpolationStrategy::Simple(interpolator) => {
+                            interpolator(raster_point, &triangle, &tri_heights)
+                        }
+                        InterpolationStrategy::PlaneBased { plane_interpolator, .. } => {
+                            if let Some(plane) = &plane {
+                                plane_interpolator(raster_point,&triangle, &tri_heights, plane)
+                            } else {
+                                None
+                            }
+                        }
+                    } {
                         // Try to write the value if the cell is still "empty" (contains NaN)
                         cell.store(interpolated_height.to_bits(), Ordering::Relaxed);
+
                     }
+
+
                 }
                 raster_point.x += 1;
             }

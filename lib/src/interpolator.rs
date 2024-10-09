@@ -3,21 +3,21 @@ use nalgebra::{Matrix2, Matrix3, Point2, Vector2, Vector3};
 use crate::geometry::Triangle;
 
 pub type Interpolator = fn(Point2<usize>, &Triangle<u16>, &[f64; 3]) -> Option<f32>;
+pub type PlaneInterpolator = fn(Point2<usize>, &Triangle<u16>, &[f64; 3], &Vector3<f64>) -> Option<f32>;
+pub type PlaneSolver = fn(&Triangle<u16>, &[f64; 3]) -> Option<Vector3<f64>>;
 
-pub fn interpolate_height_lu(
-    point_usize: Point2<usize>,
-    triangle_u16: &Triangle<u16>,
-    heights: &[f64; 3],
-) -> Option<f32> {
-    interpolate_height_lu_bounded(point_usize, triangle_u16, heights, true)
+pub enum InterpolationStrategy {
+    Simple(Interpolator),
+    PlaneBased {
+        plane_interpolator: PlaneInterpolator,
+        plane_solver: PlaneSolver,
+    },
 }
 
-pub fn interpolate_height_lu_bounded(
-    point_usize: Point2<usize>,
+pub fn solve_plane_coefficients_lu(
     triangle_u16: &Triangle<u16>,
     heights: &[f64; 3],
-    bounds_check: bool,
-) -> Option<f32> {
+) -> Option<Vector3<f64>> {
     // Cast triangle vertices to f64 for precision
     let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
     let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
@@ -31,64 +31,14 @@ pub fn interpolate_height_lu_bounded(
     );
     let b = Vector3::new(heights[0], heights[1], heights[2]);
 
-    // Solve for the plane coefficients using QR decomposition
-    if let Some(coefficients) = a.lu().solve(&b) {
-        let a = coefficients[0];
-        let b = coefficients[1];
-        let c = coefficients[2];
-
-        // Cast point to f64
-        let point = Point2::new(point_usize.x as f64, point_usize.y as f64);
-
-        // Calculate the height at the given point
-        let z = a * point.x + b * point.y + c;
-
-        if bounds_check {
-            // Solve for s and t using the inverse of the matrix formed by v1 - v0 and v2 - v0
-            let v0v1 = v1 - v0;
-            let v0v2 = v2 - v0;
-            let v0p = point - v0;
-
-            let a = Matrix2::new(v0v1.x, v0v2.x, v0v1.y, v0v2.y);
-            if let Some(inv_a) = a.try_inverse() {
-                let st = inv_a * Vector2::new(v0p.x, v0p.y);
-                let s = st.x;
-                let t = st.y;
-
-                // Check if the point is inside the triangle
-                if s >= 0.0 && t >= 0.0 && s + t <= 1.0 {
-                     Some(z as f32)
-                } else {
-                    // The point is outside the triangle
-                    None
-                }
-            } else {
-                // The matrix is singular, no solution
-                None
-            }
-        } else {
-            Some(z as f32)
-        }
-    }
-    else {
-        None
-    }
+    // Solve for the plane coefficients using LU decomposition
+    a.lu().solve(&b)
 }
 
-pub fn interpolate_height_qr(
-    point_usize: Point2<usize>,
+pub fn solve_plane_coefficients_qr(
     triangle_u16: &Triangle<u16>,
     heights: &[f64; 3],
-) -> Option<f32> {
-    interpolate_height_qr_bounded(point_usize, triangle_u16, heights, true)
-}
-
-pub fn interpolate_height_qr_bounded(
-    point_usize: Point2<usize>,
-    triangle_u16: &Triangle<u16>,
-    heights: &[f64; 3],
-    bounds_check: bool,
-) -> Option<f32> {
+) -> Option<Vector3<f64>> {
     // Cast triangle vertices to f64 for precision
     let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
     let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
@@ -102,47 +52,64 @@ pub fn interpolate_height_qr_bounded(
     );
     let b = Vector3::new(heights[0], heights[1], heights[2]);
 
-    // Solve for the plane coefficients using QR decomposition
-    if let Some(coefficients) = a.qr().solve(&b) {
-        let a = coefficients[0];
-        let b = coefficients[1];
-        let c = coefficients[2];
+    // Solve for the plane coefficients using LU decomposition
+    a.lu().solve(&b)
+}
 
-        // Cast point to f64
-        let point = Point2::new(point_usize.x as f64, point_usize.y as f64);
 
-        // Calculate the height at the given point
-        let z = a * point.x + b * point.y + c;
+pub fn interpolate_height_plane(
+    point_usize: Point2<usize>,
+    triangle_u16: &Triangle<u16>,
+    plane: &Vector3<f64>,
+) -> Option<f32> {
+    interpolate_height_plane_bounded(point_usize, triangle_u16, plane, true)
+}
 
-        if bounds_check {
-            // Solve for s and t using the inverse of the matrix formed by v1 - v0 and v2 - v0
-            let v0v1 = v1 - v0;
-            let v0v2 = v2 - v0;
-            let v0p = point - v0;
+pub fn interpolate_height_plane_bounded(
+    point_usize: Point2<usize>,
+    triangle_u16: &Triangle<u16>,
+    plane: &Vector3<f64>,
+    bounds_check: bool,
+) -> Option<f32> {
+    let a = plane[0];
+    let b = plane[1];
+    let c = plane[2];
 
-            let a = Matrix2::new(v0v1.x, v0v2.x, v0v1.y, v0v2.y);
-            if let Some(inv_a) = a.try_inverse() {
-                let st = inv_a * Vector2::new(v0p.x, v0p.y);
-                let s = st.x;
-                let t = st.y;
+    // Cast point to f64
+    let point = Point2::new(point_usize.x as f64, point_usize.y as f64);
 
-                // Check if the point is inside the triangle
-                if s >= 0.0 && t >= 0.0 && s + t <= 1.0 {
-                     Some(z as f32)
-                } else {
-                    // The point is outside the triangle
-                    None
-                }
+    // Calculate the height at the given point
+    let z = a * point.x + b * point.y + c;
+
+    if bounds_check {
+        // Solve for s and t using the inverse of the matrix formed by v1 - v0 and v2 - v0
+        let v0 = Point2::new(triangle_u16.vertices[0].x as f64, triangle_u16.vertices[0].y as f64);
+        let v1 = Point2::new(triangle_u16.vertices[1].x as f64, triangle_u16.vertices[1].y as f64);
+        let v2 = Point2::new(triangle_u16.vertices[2].x as f64, triangle_u16.vertices[2].y as f64);
+
+        let v0v1 = v1 - v0;
+        let v0v2 = v2 - v0;
+        let v0p = point - v0;
+
+        let a = Matrix2::new(v0v1.x, v0v2.x, v0v1.y, v0v2.y);
+        if let Some(inv_a) = a.try_inverse() {
+            let st = inv_a * Vector2::new(v0p.x, v0p.y);
+            let s = st.x;
+            let t = st.y;
+
+            // Check if the point is inside the triangle
+            if s >= 0.0 && t >= 0.0 && s + t <= 1.0 {
+                Some(z as f32)
             } else {
-                // The matrix is singular, no solution
+                // The point is outside the triangle
                 None
             }
         } else {
-            Some(z as f32)
+            // The matrix is singular, no solution
+            None
         }
-    }
-    else {
-        None
+    } else {
+        Some(z as f32)
     }
 }
 
@@ -249,7 +216,8 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
-        let result = interpolate_height_qr_bounded(point, &triangle, &heights, true);
+        let plane = solve_plane_coefficients_qr(&triangle, &heights).unwrap();
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);
         assert_eq!(result, Some(15.0));
     }
 
@@ -264,8 +232,8 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_qr_bounded(point, &triangle, &heights, true);
-        assert_eq!(result, None);
+        let plane = solve_plane_coefficients_qr(&triangle, &heights).unwrap();
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);        assert_eq!(result, None);
     }
 
     #[test]
@@ -279,7 +247,8 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_qr_bounded(point, &triangle, &heights, false);
+        let plane = solve_plane_coefficients_qr(&triangle, &heights).unwrap();
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, false);       
         assert_eq!(result, Some(45.0)); // note its outside but still calculcated
     }
 
@@ -324,7 +293,8 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(5, 5);
-        let result = interpolate_height_lu_bounded(point, &triangle, &heights, true);
+        let plane: nalgebra::Matrix<f64, nalgebra::Const<3>, nalgebra::Const<1>, nalgebra::ArrayStorage<f64, 3, 1>> = solve_plane_coefficients_lu(&triangle, &heights).unwrap();
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);        
         assert_eq!(result, Some(15.0));
     }
 
@@ -339,7 +309,8 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_lu_bounded(point, &triangle, &heights, true);
+        let plane = solve_plane_coefficients_lu(&triangle, &heights).unwrap();
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, true);    
         assert_eq!(result, None);
     }
 
@@ -354,7 +325,8 @@ mod tests {
         };
         let heights = [0.0, 10.0, 20.0];
         let point = Point2::new(15, 15);
-        let result = interpolate_height_lu_bounded(point, &triangle, &heights, false);
+        let plane = solve_plane_coefficients_lu(&triangle, &heights).unwrap();
+        let result = interpolate_height_plane_bounded(point, &triangle, &plane, false);
         assert_eq!(result, Some(45.0)); // note its outside but still calculcated
     }
 

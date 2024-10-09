@@ -1,9 +1,10 @@
 use std::{fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use qmlib::{interpolator::{interpolate_height_barycentric, interpolate_height_lu_bounded, interpolate_height_parametric}, quantized_mesh_tile, tiff_writer::write_tiff};
+use qmlib::{interpolator::{ interpolate_height_barycentric, interpolate_height_plane, solve_plane_coefficients_lu, solve_plane_coefficients_qr, Interpolator, PlaneInterpolator, PlaneSolver}, quantized_mesh_tile, tiff_writer::write_tiff};
+use qmlib::interpolator::InterpolationStrategy;
 
-fn benchmark(c: &mut Criterion) {
+fn benchmark(c: &mut Criterion) { 
     let path: PathBuf = PathBuf::from(format!("{}/../test/terrain_data/a/15/59489/9692.terrain", env!("CARGO_MANIFEST_DIR")));
     
 
@@ -13,47 +14,63 @@ fn benchmark(c: &mut Criterion) {
     let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path).unwrap();
     let output_path = path.with_extension("bench.tiff");
 
+     // Define the plane-based interpolator and solver
+     let plane_interpolator: PlaneInterpolator = |point, triangle, _heights, plane| {
+        interpolate_height_plane(point, triangle, plane)
+    };
+    let lu_plane_solver: PlaneSolver = solve_plane_coefficients_lu;
+    let qr_plane_solver: PlaneSolver = solve_plane_coefficients_qr;
+
+    let barycentric_interpolator: Interpolator = interpolate_height_barycentric;
+    let parametric_interpolator: Interpolator = interpolate_height_barycentric;
+
     c.bench_function("write_tiff_barycentric", |b| {
         b.iter(|| {
-            write_tiff(&tile, &output_path, scale_shift, interpolate_height_barycentric).unwrap();
+            write_tiff(
+                &tile,
+                &output_path,
+                scale_shift,
+                InterpolationStrategy::Simple(barycentric_interpolator),
+            ).unwrap();
         })
     });
 
     c.bench_function("write_tiff_parametric", |b| {
         b.iter(|| {
-            write_tiff(&tile, &output_path, scale_shift, interpolate_height_parametric).unwrap();
+            write_tiff(
+                &tile,
+                &output_path,
+                scale_shift,
+                InterpolationStrategy::Simple(parametric_interpolator),
+            ).unwrap();
         })
     });
 
     c.bench_function("write_tiff_qr_bounded", |b| {
         b.iter(|| {
-            write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
-                interpolate_height_lu_bounded(point, triangle, heights, true) // Set bounds_check to true
-            }).unwrap();
-        })
-    });
-
-    c.bench_function("write_tiff_qr_unbounded", |b| {
-        b.iter(|| {
-            write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
-                interpolate_height_lu_bounded(point, triangle, heights, false) // Set bounds_check to true
-            }).unwrap();
+            write_tiff(
+                &tile,
+                &output_path,
+                scale_shift,
+                InterpolationStrategy::PlaneBased {
+                    plane_interpolator,
+                    plane_solver:qr_plane_solver,
+                },
+            ).unwrap();
         })
     });
 
     c.bench_function("write_tiff_lu_bounded", |b| {
         b.iter(|| {
-            write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
-                interpolate_height_lu_bounded(point, triangle, heights, true) // Set bounds_check to true
-            }).unwrap();
-        })
-    });
-
-    c.bench_function("write_tiff_lu_unbounded", |b| {
-        b.iter(|| {
-            write_tiff(&tile, &output_path, scale_shift, |point, triangle, heights| {
-                interpolate_height_lu_bounded(point, triangle, heights, false) // Set bounds_check to true
-            }).unwrap();
+            write_tiff(
+                &tile,
+                &output_path,
+                scale_shift,
+                InterpolationStrategy::PlaneBased {
+                    plane_interpolator,
+                    plane_solver:lu_plane_solver,
+                },
+            ).unwrap();
         })
     });
 

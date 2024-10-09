@@ -5,18 +5,22 @@ use tiff::{
 };
 
 use crate::{
-    interpolator::Interpolator, quantized_mesh_tile::{QuantizedMeshTile, CRS}, raster::{raster_dim_pixels, rasterise}
+    interpolator::InterpolationStrategy, quantized_mesh_tile::{QuantizedMeshTile, CRS}, raster::{raster_dim_pixels, rasterise}
 };
 
 pub fn write_tiff(
     qmt: &QuantizedMeshTile,
     filename: &Path,
     scale_shift: u16,
-    interpolator: Interpolator,
+    strategy: InterpolationStrategy,
 ) -> Result<(), Box<dyn Error>> {
     let raster_size = raster_dim_pixels(scale_shift);
-    let raster = rasterise(qmt, scale_shift, interpolator);
 
+    let raster = rasterise(
+        qmt,
+        scale_shift,
+        strategy, // or InterpolationStrategy::PlaneBased
+    );
     let mut tiff: TiffEncoder<File> = TiffEncoder::new(File::create(filename)?)?;
     let mut image = tiff
         .new_image::<Gray32Float>(raster_size.into(), raster_size.into())
@@ -131,7 +135,7 @@ pub fn write_tiff(
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{interpolator::interpolate_height_parametric, test_utils::test_data::qmt_test_chess, tiff_writer::write_tiff};
+    use crate::{interpolator::{self, interpolate_height_parametric}, test_utils::test_data::qmt_test_chess, tiff_writer::write_tiff};
 
     #[test]
     fn test_write_tiff() {
@@ -142,7 +146,7 @@ mod tests {
 
         let scale_shift: u16 = 8; // Example scale_shift for rasterisation
         let interpolator = interpolate_height_parametric; // fastest in my limited testing
-        let result = write_tiff(&mesh, &path, scale_shift, interpolator);
+        let result = write_tiff(&mesh, &path, scale_shift, interpolator::InterpolationStrategy::Simple(interpolator));
 
         assert!(result.is_ok(), "TIFF generation failed: {result:?}");
     }

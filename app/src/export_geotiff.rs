@@ -21,7 +21,7 @@ fn main() -> Result<(), String> {
 
     // write to the same location
     outpath.set_extension("tiff");
-    tiff_writer::write_tiff(&tile, &outpath, scale_shift, interpolator).map_err(|e| format!("Error exporting to GeoTIFF: {}", e))?;
+    tiff_writer::write_tiff(&tile, &outpath, scale_shift, qmlib::interpolator::InterpolationStrategy::Simple(interpolator)).map_err(|e| format!("Error exporting to GeoTIFF: {}", e))?;
 
 
     Ok(())
@@ -40,7 +40,7 @@ mod tests {
         let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path).unwrap();
         path.set_extension(".test.tiff");
         let interpolator = interpolate_height_barycentric;
-        let result = tiff_writer::write_tiff(&tile, &path, scale_shift, interpolator);
+        let result = tiff_writer::write_tiff(&tile, &path, scale_shift, qmlib::interpolator::InterpolationStrategy::Simple(interpolator));
         assert!(result.is_ok(), "Failed to write TIFF: {:?}", result.err());
         
         // Clean up test output
