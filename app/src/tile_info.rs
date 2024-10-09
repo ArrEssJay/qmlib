@@ -42,20 +42,20 @@ fn main() -> Result<(), String> {
                 centre_geodetic.to_degrees()
             );
 
-            // Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
-            // let to_enu_matrix = calculate_enu_to_ecef_rotation_matrix(
-            //     &qmt.quantized_mesh.header.center,
-            //     &qmt.ellipsoid,
-            // )
-            // .transpose();
-            // let dist_enu = to_enu_matrix.transform_vector(
-            //     &(qmt.quantized_mesh.header.bounding_sphere.center
-            //         - qmt.quantized_mesh.header.center),
-            // );
-            // println!(
-            //     "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",
-            //     dist_enu
-            // );
+            //Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
+            let to_enu_matrix = calculate_enu_to_ecef_rotation_matrix(
+                &qmt.quantized_mesh.header.center,
+                &qmt.ellipsoid,
+            )
+            .transpose();
+            let dist_enu = to_enu_matrix.transform_vector(
+                &(qmt.quantized_mesh.header.bounding_sphere.center.0
+                    - qmt.quantized_mesh.header.center.0),
+            );
+            println!(
+                "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",
+                dist_enu
+            );
 
             println!("\nVertex Array: count => [min:max] ");
             println!(
