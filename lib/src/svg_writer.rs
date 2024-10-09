@@ -17,14 +17,14 @@ pub fn write_svg(quantized_mesh: &QuantizedMesh, file_path: &Path) -> io::Result
     let triangle_index = &vertex_data.triangle_index;
 
     for vertex in triangle_index {
-        let u0 = vertex_data.u[vertex[0]];
-        let v0 = vertex_data.v[vertex[0]];
+        let u0 = vertex_data.u[vertex[0] as usize];
+        let v0 = vertex_data.v[vertex[0] as usize];
 
-        let u1 = vertex_data.u[vertex[1]];
-        let v1 = vertex_data.v[vertex[1]];
+        let u1 = vertex_data.u[vertex[1] as usize];
+        let v1 = vertex_data.v[vertex[1] as usize];
 
-        let u2 = vertex_data.u[vertex[2]];
-        let v2 = vertex_data.v[vertex[2]];
+        let u2 = vertex_data.u[vertex[2] as usize];
+        let v2 = vertex_data.v[vertex[2] as usize];
         // Create SVG polygon element
         svg_data.push_str(r#"<polygon points=""#);
 

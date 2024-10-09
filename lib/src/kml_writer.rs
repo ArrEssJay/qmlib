@@ -13,16 +13,16 @@ pub fn write_kml(qmt: &QuantizedMeshTile, file_path: &Path) -> io::Result<()> {
     kml_data.push_str(r#"<Document>"#);
 
     // Get index data
-    let index_data: &Vec<[usize; 3]> = &qmt.quantized_mesh.vertex_data.triangle_index;
+    let index_data: &Vec<[u32; 3]> = &qmt.quantized_mesh.vertex_data.triangle_index;
     let vertices = &qmt.vertices_as_geodetic_point3();
 
     // Loop through triangles and write to KML
     for (idx, triangle_indices) in index_data.iter().enumerate() {
         
         let triangle: [&GeodeticPoint3<f64>; 3] = [
-            &vertices[triangle_indices[0]],
-            &vertices[triangle_indices[1]],
-            &vertices[triangle_indices[2]],
+            &vertices[triangle_indices[0] as usize],
+            &vertices[triangle_indices[1] as usize],
+            &vertices[triangle_indices[2] as usize],
         ];
 
         // KML Placemark for each triangle

@@ -88,14 +88,16 @@ pub fn write_tiff(
     let pixel_size_y = width / f64::from(raster_size); // Calculate pixel size in Y
     let pixel_scale = [pixel_size_x, pixel_size_y, 1.0]; // Set Z pixel size to 1 as Z values require no scaling
 
+    #[cfg(debug_assertions)]
+    {
+        println!("Tie Points: {tiepoints:?}");
+        println!("Bounding Rectange: {ll:?} {ur:?}");
+        println!("Bounding Rectangle Height: {height:?}");
+        println!("Bounding Rectangle Width: {width:?}");
 
-    println!("Tie Points: {tiepoints:?}");
-    println!("Bounding Rectange: {ll:?} {ur:?}");
-    println!("Bounding Rectangle Height: {height:?}");
-    println!("Bounding Rectangle Width: {width:?}");
-
-    println!("Scale: ({pixel_scale:?})");
-    println!("raster_size: ({raster_size:?})");
+        println!("Scale: ({pixel_scale:?})");
+        println!("raster_size: ({raster_size:?})");
+    }
 
     image.encoder().write_tag(Tag::ModelPixelScaleTag, &pixel_scale[..]).unwrap();
 
@@ -138,7 +140,7 @@ mod tests {
         let mesh = qmt_test_chess();
         let path: PathBuf = PathBuf::from("./test.tiff");       
 
-        let scale_shift: u16 = 5; // Example scale_shift for rasterisation
+        let scale_shift: u16 = 8; // Example scale_shift for rasterisation
 
         let result = write_tiff(&mesh, &path, scale_shift);
 

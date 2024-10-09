@@ -57,7 +57,7 @@ pub mod test_data {
         }
     }
 
-    fn vd_test_chessboard_mesh(grid_size: usize, high_value: u16) -> VertexData{
+    fn vd_test_chessboard_mesh(grid_size: u32, high_value: u16) -> VertexData{
         let mut u = Vec::new();
         let mut v = Vec::new();
         let mut height = Vec::new();
@@ -131,7 +131,7 @@ pub mod test_data {
     pub fn qm_test_chessboard_mesh() -> QuantizedMesh {
         QuantizedMesh {
             header: qm_header_test_1(),
-            vertex_data: vd_test_chessboard_mesh(32usize,16384u16),
+            vertex_data: vd_test_chessboard_mesh(32u32,16384u16),
             extensions: vec![],
         }
     }

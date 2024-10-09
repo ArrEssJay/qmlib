@@ -1,35 +1,10 @@
-use nalgebra::allocator::Allocator;
-use nalgebra::{DefaultAllocator, DimName, Matrix4, OPoint, Point2, Point3, RealField, Scalar, SimdPartialOrd, Vector3};
+use nalgebra::{Matrix4, Point2, Point3, RealField, Scalar, SimdPartialOrd, Vector3};
 use std::clone::Clone;
 use std::cmp::PartialEq;
 use std::fmt::Debug;
 use std::ops::Sub;
 
 // nalgebra Wrappers
-pub trait CastOPoint<T, D, U>
-where
-    T: Scalar,
-    D: DimName,
-    U: Scalar,
-    DefaultAllocator: Allocator<D>
-{
-    fn cast_opoint(&self) -> OPoint<U, D>;
-}
-
-impl<T, D, U> CastOPoint<T, D, U> for OPoint<T, D>
-    where
-        T: Scalar, // Type from
-        D: DimName, // dimensions
-        U: Scalar + From<T>, // Type to
-        DefaultAllocator: Allocator<D>,
-{
-    fn cast_opoint(&self) -> OPoint<U, D> 
-        
-    {
-        OPoint::from(self.coords.map(|value| U::from(value)))
-    }
-}
-
 #[derive(Debug)]
 pub struct CartesianPoint3<T>(pub Point3<T>)
 where
@@ -73,15 +48,13 @@ where
 
         let v1 = z - minor * beta.sin();
         let v2 = q - major * beta.cos();
-        let alt;
-
         let inside =
             (x * x / major / major) + (y * y / major / major) + (z * z / minor / minor)
                 < T::one();
-        if inside {
-            alt = -(v1 * v1 + v2 * v2).sqrt();
+        let alt = if inside {
+            -(v1 * v1 + v2 * v2).sqrt()
         } else {
-            alt = (v1 * v1 + v2 * v2).sqrt();
+            (v1 * v1 + v2 * v2).sqrt()
         };
 
         GeodeticPoint3::new(lat, lon, alt) // Direct construction

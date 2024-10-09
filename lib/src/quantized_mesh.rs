@@ -18,7 +18,7 @@ pub static UV_SIZE_U16:u16 = 32768;
 pub static UV_SIZE_F64:f64 = 32768.0;
 
 // Types
-pub type TriangleVertexIndex = [usize; 3];
+pub type TriangleVertexIndex = [u32; 3];
 
 
 // Structs
@@ -229,19 +229,19 @@ pub fn vertex_vec_decode(count: u32) ->  binrw::BinResult<Vec<u16>> {
 // Triangle index is high watermark encoded
 // Sanity check included as this encoding can 
 #[binrw::parser(reader, endian)]
-pub fn triangle_vec_decode(count: u32, long: bool) -> binrw::BinResult<Vec<[usize; 3]>> {
-    let mut res: Vec<[usize; 3]> = Vec::with_capacity(count as usize);
-    let mut highest: usize = 0;
+pub fn triangle_vec_decode(count: u32, long: bool) -> binrw::BinResult<Vec<[u32; 3]>> {
+    let mut res: Vec<[u32; 3]> = Vec::with_capacity(count as usize);
+    let mut highest: u32 = 0;
 
     for _ in 0..count {
         // Initialize an array for the triangle
         let mut tri: TriangleVertexIndex = [0; 3];
 
         for  vertex in &mut tri {
-            let n: usize = if long {
-                u32::read_options(reader, endian, ())? as usize
+            let n: u32 = if long {
+                u32::read_options(reader, endian, ())? 
             } else {
-                u16::read_options(reader, endian, ())? as usize
+                u16::read_options(reader, endian, ())? as u32
             };
 
             // bounds check
