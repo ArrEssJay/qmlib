@@ -8,10 +8,28 @@ fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        return Err(format!("Usage: {} <path>", args[0]));
+        return Err(format!("Usage: {} <path> [--geodetic|--geocentric]", args[0]));
     }
 
-    let pathstr = &args[1];
+    let mode = if args.len() > 2 {
+        match args[1].as_str() {
+            "--geodetic" => "geodetic",
+            "--geocentric" => "geocentric",
+            _ => return Err(format!("Invalid option: {}. Use --geodetic (default) or --geocentric.", args[1])),
+        }
+    } else {
+        "geodetic" // default mode
+    };
+
+    let coord_type = if mode == "geodetic" {
+        csv_writer::CoordType::Geodetic
+    } else {
+        csv_writer::CoordType::Geocentric
+    };
+
+    println!("Outputting {} co-ordinates", mode);
+
+    let pathstr = &args[2];
     let path: PathBuf = PathBuf::from(pathstr);
 
     // Load the QuantizedMesh
@@ -21,7 +39,7 @@ fn main() -> Result<(), String> {
     let mut outpath = path.clone();
 
     outpath.set_extension("csv");
-    csv_writer::write_csv(&qmt, &outpath)
+    csv_writer::write_csv(&qmt, &outpath, coord_type)
         .map_err(|e| format!("Error exporting to CSV: {}", e))?;
 
     Ok(())

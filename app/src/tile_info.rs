@@ -1,8 +1,8 @@
 use core::str;
+use geo::{Coord, GeodesicArea, LineString, Polygon};
 use std::env;
 use std::path::PathBuf;
 use std::result::Result;
-use geo::{Coord, GeodesicArea, LineString, Polygon};
 
 use qmlib::geometry::calculate_enu_to_ecef_rotation_matrix;
 use qmlib::quantized_mesh_tile;
@@ -23,31 +23,37 @@ fn main() -> Result<(), String> {
         Ok(qmt) => {
             // Get bounding box
             println!(
-                "Tile Bounding Rectangle: {:#?}",
-                qmt.bounding_rectangle
+                "Tile Bounding Rectangle: lat:{:#?}° lon:{:#?}°",
+                qmt.bounding_rectangle.lower_left.lat().to_degrees(),
+                qmt.bounding_rectangle.lower_left.lon().to_degrees()
             );
 
+            let centre_geodetic = qmt.quantized_mesh.header.center.to_geodetic(&qmt.ellipsoid);
+            println!(
+                "Tile Centre (Geodetic): {:#?}",
+                centre_geodetic.to_degrees()
+            );
             // Print center of tile in ecef and lat/lon
             println!(
                 "Tile Centre (Geocentric): {:#?}",
                 qmt.quantized_mesh.header.center
             );
 
-            // Determine tile centre (ellipsoid height) 
-            // and bounding sphere centre offset
-            // For validation these should be a distance vertically
-            // approximately equal to the average tile height 
-
-            let centre_geodetic = qmt
-                .quantized_mesh
-                .header
-                .center
-                .to_geodetic(&qmt.ellipsoid);
+            // Print center of tile in ecef and lat/lon
             println!(
-                "Tile Centre (Geodetic): {:#?}",
-                centre_geodetic.to_degrees()
+                "Tile Bounding Sphere Centre (Geocentric): {:#?}",
+                qmt.quantized_mesh.header.bounding_sphere.center
+            );
+            println!(
+                "Tile Bounding Sphere Radius: {:#?}m",
+                qmt.quantized_mesh.header.bounding_sphere.radius
             );
 
+            // Determine tile centre (ellipsoid height)
+            // and bounding sphere centre offset
+            // For validation these should be a distance vertically
+            // approximately equal to the average tile height
+            //
             //Calculate the ENU to ECEF rotation matrix and the distance to the bounding sphere center
             let to_enu_matrix = calculate_enu_to_ecef_rotation_matrix(
                 &qmt.quantized_mesh.header.center,
@@ -62,7 +68,13 @@ fn main() -> Result<(), String> {
                 "Tile Centre -> Bounding Sphere Centre (ENU from tile centre): {:#?}",
                 dist_enu
             );
-            
+
+            println!(
+                "Tile Height min: {:#?}, max: {:#?}",
+                &qmt.quantized_mesh.header.min_height,
+                &qmt.quantized_mesh.header.max_height
+            );
+
             let br = qmt.bounding_rectangle;
             let min_x = br.lower_left.0.x;
             let max_x = br.upper_right.0.x;
@@ -74,21 +86,17 @@ fn main() -> Result<(), String> {
                 Coord { x: min_x, y: max_y },
                 Coord { x: max_x, y: max_y },
                 Coord { x: max_x, y: min_y },
-
             ]);
-            
+
             // Determine the tile area
-            let polygon = Polygon::new(
-                exterior,
-                vec![],
-            ); 
+            let polygon = Polygon::new(exterior, vec![]);
 
             let area = polygon.geodesic_area_unsigned();
             let formatted_area = format!("{:.2e}", area);
-            println!("\n Bounding Rectangle Area: {formatted_area}m²");
+            println!("\nBounding Rectangle Area: {formatted_area}m²");
 
             println!("\nVertex Array: count => [min:max] ");
-            
+
             println!(
                 "Vertex (U): {:#?} => [{:#?}:{:#?}]",
                 qmt.quantized_mesh.vertex_data.u.len(),
