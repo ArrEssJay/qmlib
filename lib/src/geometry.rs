@@ -24,38 +24,24 @@ where
         let y = self.0.y;
         let z = self.0.z;
 
-        let major = T::from_f64(ellipsoid.semi_major_axis).unwrap();
-        let minor = T::from_f64(ellipsoid.semi_minor_axis).unwrap();
+        let a = T::from_f64(ellipsoid.semi_major_axis).unwrap();
+        let b = T::from_f64(ellipsoid.semi_minor_axis).unwrap();
+        let e2 = (a * a - b * b) / (a * a);
+        let e_prime2 = (a * a - b * b) / (b * b);
 
-        let r = (x * x + y * y + z * z).sqrt();
-        let e = (major * major - minor * minor).sqrt();
-        let var = r * r - e * e;
-        let u = (T::from_f64(0.5).unwrap() * var
-            + T::from_f64(0.5).unwrap()
-                * (var * var + T::from_f64(4.0).unwrap() * e * e * z * z).sqrt())
-        .sqrt();
+        let p = (x * x + y * y).sqrt();
+        let theta = (z * a).atan2(p * b);
 
-        let q = (x * x + y * y).sqrt();
-        let hu_e = (u * u + e * e).sqrt();
-        let mut beta = (hu_e / u * z / q).atan();
+        let sin_theta = theta.sin();
+        let cos_theta = theta.cos();
 
-        let eps = ((minor * u - major * hu_e + e * e) * beta.sin())
-            / (major * hu_e / beta.cos() - e * e * beta.cos());
-        beta += eps;
-
-        let lat = (major / minor * beta.tan()).atan();
+        let lat = ((z + e_prime2 * b * sin_theta * sin_theta * sin_theta) / (p - e2 * a * cos_theta * cos_theta * cos_theta)).atan();
         let lon = y.atan2(x);
 
-        let v1 = z - minor * beta.sin();
-        let v2 = q - major * beta.cos();
-        let inside =
-            (x * x / major / major) + (y * y / major / major) + (z * z / minor / minor)
-                < T::one();
-        let alt = if inside {
-            -(v1 * v1 + v2 * v2).sqrt()
-        } else {
-            (v1 * v1 + v2 * v2).sqrt()
-        };
+        let sin_lat = lat.sin();
+        let n = a / (T::one() - e2 * sin_lat * sin_lat).sqrt();
+        let alt = p / lat.cos() - n;
+
 
         GeodeticPoint3::new(lat, lon, alt) // Direct construction
     }
@@ -88,11 +74,11 @@ where
     }
 
     pub fn lat(&self) -> &T {
-        &self.0.y
+        &self.0.x
     }
 
     pub fn lon(&self) -> &T {
-        &self.0.x
+        &self.0.y
     }
 
     pub fn height(&self) -> &T {
@@ -123,13 +109,13 @@ where
         let b = T::from_f64(ellipsoid.semi_minor_axis).unwrap();
         let e2 = (a * a - b * b) / (a * a); // Square of eccentricity
 
-        let n = a / ((T::one() - e2 * lat.sin().powi(2)).sqrt()); // Radius of curvature in the prime vertical
+        let n = a / ((T::one() -  T::from_f64(ellipsoid.eccentricity_squared).unwrap() * lat.sin().powi(2)).sqrt()); // Radius of curvature in the prime vertical
 
         let x = (n + *height) * lat.cos() * lon.cos();
         let y = (n + *height) * lat.cos() * lon.sin();
         let z = (n * (T::one() - e2) + *height) * lat.sin();
 
-        CartesianPoint3(Point3::new(x, y, z))
+        CartesianPoint3(Point3::new(x, y, z)) 
     }
 }
 
@@ -279,18 +265,20 @@ impl Ellipsoid {
 
     /// Calculate the surface normal vector at the given ECEF position
     pub fn geodetic_surface_normal(&self, p: &CartesianPoint3<f64>) -> Vector3<f64> {
-        let normal = Vector3::new(
-            p.0.x / (self.semi_major_axis * self.semi_major_axis),
-            p.0.y / (self.semi_major_axis * self.semi_major_axis),
-            p.0.z / (self.semi_minor_axis * (self.semi_minor_axis)),
-        );
-        // Normalize the vector to get the unit normal
-        normal.normalize()
+        geodetic_surface_normal(self, p)
     }
 }
 
 // Shared Functions
-
+pub fn geodetic_surface_normal(ellipsoid: &Ellipsoid, p: &CartesianPoint3<f64>) -> Vector3<f64> {
+    let normal = Vector3::new(
+        p.0.x / (ellipsoid.semi_major_axis * ellipsoid.semi_major_axis),
+        p.0.y / (ellipsoid.semi_major_axis * ellipsoid.semi_major_axis),
+        p.0.z / (ellipsoid.semi_minor_axis * (ellipsoid.semi_minor_axis)),
+    );
+    // Normalize the vector to get the unit normal
+    normal.normalize()
+}
 /// Calculate the 4x4 ENU to ECEF rotation matrix for a given ECEF reference point
 pub fn calculate_enu_to_ecef_rotation_matrix(
     ecef_position: &CartesianPoint3<f64>,
@@ -314,10 +302,7 @@ pub fn calculate_enu_to_ecef_rotation_matrix(
         north.z,
         up.z,
         0.0,
-        ecef_position.0.x,
-        ecef_position.0.y,
-        ecef_position.0.z,
-        1.0,
+       0.0,    0.0,    0.0, 1.0,
     )
 }
 
@@ -347,3 +332,117 @@ where
 
     degrees / degrees_per_radian // Convert radians to degrees
 }
+
+ #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_cartesian_point3_new() {
+            let point = CartesianPoint3::new(1.0, 2.0, 3.0);
+            assert_eq!(point.0, Point3::new(1.0, 2.0, 3.0));
+        }
+
+        #[test]
+        fn test_geodetic_point3_new() {
+            let point = GeodeticPoint3::new(1.0, 2.0, 3.0);
+            assert_eq!(point.0, Point3::new(1.0, 2.0, 3.0));
+        }
+
+        #[test]
+        fn test_geodetic_point3_from_degrees() {
+            let point = GeodeticPoint3::from_degrees(180.0, 90.0, 100.0);
+            assert_eq!(point.0, Point3::new(std::f64::consts::PI, std::f64::consts::PI / 2.0, 100.0));
+        }
+
+        #[test]
+        fn test_geodetic_point3_to_degrees() {
+            let point = GeodeticPoint3::new(std::f64::consts::PI, std::f64::consts::PI / 2.0, 100.0);
+            let degrees_point = point.to_degrees();
+            assert_eq!(degrees_point.0, Point3::new(180.0, 90.0, 100.0));
+        }
+
+        #[test]
+        fn test_geodetic_point3_to_ecef() {
+            let ellipsoid = Ellipsoid::wgs84();
+            let geodetic_point = GeodeticPoint3::new(0.0, 0.0, 0.0);
+            let ecef_point = geodetic_point.to_ecef(&ellipsoid);
+            assert_eq!(ecef_point.0, Point3::new(ellipsoid.semi_major_axis, 0.0, 0.0));
+        }
+
+        #[test]
+        fn test_rectangle_height() {
+            let rect = Rectangle {
+                lower_left: Point2::new(0.0, 0.0),
+                upper_right: Point2::new(1.0, 1.0),
+            };
+            assert_eq!(rect.height(), 1.0);
+        }
+
+        #[test]
+        fn test_rectangle_width() {
+            let rect = Rectangle {
+                lower_left: Point2::new(0.0, 0.0),
+                upper_right: Point2::new(1.0, 1.0),
+            };
+            assert_eq!(rect.width(), 1.0);
+        }
+
+        #[test]
+        fn test_geodetic_rectangle_to_degrees() {
+            let rect = GeodeticRectangle {
+                lower_left: GeodeticPoint2::from_degrees(0.0, 0.0),
+                upper_right: GeodeticPoint2::from_degrees(1.0, 1.0),
+            };
+            let degrees_rect = rect.to_degrees();
+            assert_eq!(degrees_rect, ((0.0, 0.0), (1.0, 1.0)));
+        }
+
+        #[test]
+        fn test_triangle_bounding_rect() {
+            let triangle = Triangle {
+                vertices: [
+                    Point2::new(0.0, 0.0),
+                    Point2::new(1.0, 1.0),
+                    Point2::new(0.5, 0.5),
+                ],
+            };
+            let bounding_rect = triangle.bounding_rect();
+            assert_eq!(bounding_rect.lower_left, Point2::new(0.0, 0.0));
+            assert_eq!(bounding_rect.upper_right, Point2::new(1.0, 1.0));
+        }
+
+        #[test]
+        fn test_calculate_enu_to_ecef_rotation_matrix() {
+            let ellipsoid = Ellipsoid::wgs84();
+            let ecef_position = CartesianPoint3::new(ellipsoid.semi_major_axis, 0.0, 0.0);
+            let rotation_matrix = calculate_enu_to_ecef_rotation_matrix(&ecef_position, &ellipsoid);
+            println!("{:?}", rotation_matrix);
+            assert_eq!(rotation_matrix,  Matrix4::new(
+                0.0, 0.0, 1.0, 0.0,
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                6378137.0, 0.0, 0.0, 1.0
+            ));
+        }
+
+        #[test]
+        fn test_lerp() {
+            let result = lerp(&0.0, &10.0, &0.5);
+            assert_eq!(result,   5.0);
+        }
+
+        #[test]
+        fn test_radians_to_degrees() {
+            let radians = std::f64::consts::PI;
+            let degrees = radians_to_degrees(radians);
+            assert_eq!(degrees, 180.0);
+        }
+
+        #[test]
+        fn test_degrees_to_radians() {
+            let degrees = 180.0;
+            let radians = degrees_to_radians(degrees);
+            assert_eq!(radians, std::f64::consts::PI);
+        }
+    }
