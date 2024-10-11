@@ -64,8 +64,8 @@ impl QuantizedMeshTile {
         let ll = &self.bounding_rectangle.lower_left;
         let ur = &self.bounding_rectangle.upper_right;
 
-        let lat = lerp(ll.lon(), ur.lon(), &(u_value / (UV_SIZE_F64 - 1.0)));
-        let lon = lerp(ll.lat(), ur.lat(), &(v_value / (UV_SIZE_F64 - 1.0)));
+        let lat = lerp(ll.lat(), ur.lat(), &(u_value / (UV_SIZE_F64 - 1.0)));
+        let lon = lerp(ll.lon(), ur.lon(), &(v_value / (UV_SIZE_F64 - 1.0)));
         let alt: f64 = lerp(
             &f64::from(self.quantized_mesh.header.min_height),
             &f64::from(self.quantized_mesh.header.max_height),
