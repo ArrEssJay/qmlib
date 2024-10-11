@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use qmlib::{interpolator::{ interpolate_height_barycentric, interpolate_height_edge, Interpolator}, quantized_mesh_tile, tiff_writer::write_tiff};
+use qmlib::{interpolator::{ interpolate_height_barycentric, interpolate_height_edge, Interpolator}, quantized_mesh_tile, raster::rasterise};
 use qmlib::interpolator::InterpolationStrategy;
 
 fn benchmark(c: &mut Criterion) { 
@@ -24,25 +24,23 @@ fn benchmark(c: &mut Criterion) {
     let barycentric_interpolator: Interpolator = interpolate_height_barycentric;
     let edge_interpolator: Interpolator = interpolate_height_edge;
 
-    c.bench_function("write_tiff_barycentric", |b| {
+    c.bench_function("rasterise_barycentric", |b| {
         b.iter(|| {
-            write_tiff(
+            rasterise(
                 &tile,
-                &output_path,
                 scale_shift,
                 InterpolationStrategy::Simple(barycentric_interpolator),
-            ).unwrap();
+            )
         })
     });
 
     c.bench_function("write_tiff_edge", |b| {
         b.iter(|| {
-            write_tiff(
+            rasterise(
                 &tile,
-                &output_path,
                 scale_shift,
                 InterpolationStrategy::Simple(edge_interpolator),
-            ).unwrap();
+            )
         })
     });
 
@@ -74,8 +72,6 @@ fn benchmark(c: &mut Criterion) {
     //     })
     // });
 
-    // Clean up test output
-    fs::remove_file(output_path).expect("Failed to clean up test output file");
 }
 
 criterion_group!(benches, benchmark);
