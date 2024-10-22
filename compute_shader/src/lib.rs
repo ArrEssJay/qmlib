@@ -10,19 +10,19 @@ use spirv_std::{
 };
 
 
-pub struct ShaderPushConstants {
-    pub raster_dim_size: u32,
-    pub height_min: f32,
-    pub height_max: f32,
+pub struct ShaderUniforms {
+    raster_dim_size: u32,
+    height_min: f32,
+    height_max: f32,
 }
 
 // Workgroup size is 8x8x1 (x,y,z)
 #[spirv(compute(threads(256)))]
 pub fn main_cs(
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] vertices: &[UVec3],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] indices: &[[u32; 3]],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] output: &mut [f32],
-    #[spirv(push_constant)] push_constants: &ShaderPushConstants,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] uniforms: &ShaderUniforms,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] vertices: &[UVec3],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] indices: &[[u32; 3]],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] output: &mut [f32],
 ) {
     for i in 0..vertices.len() {
         let v0 = vertices[indices[i][0] as usize];
@@ -39,7 +39,7 @@ pub fn main_cs(
         let raster_x_origin = min_x;
 
         // Invert y-axis by subtracting raster_point.y from raster_dim_size - 1
-        let raster_y = push_constants.raster_dim_size - 1 - min_y;
+        let raster_y = uniforms.raster_dim_size - 1 - min_y;
 
         // Build 2D point as its needed for vector math in the triangle rasteriser
         let  mut raster_point: UVec2 = UVec2::new(raster_x_origin, raster_y);
@@ -53,12 +53,12 @@ pub fn main_cs(
             raster_point.x = raster_x_origin; // reset scanline x each row
             for _ in 0..(max_x - min_x) {
                 // index in the flat raster
-                let raster_idx = ((raster_y * push_constants.raster_dim_size) + raster_point.x) as usize;
+                let raster_idx = ((raster_y * uniforms.raster_dim_size) + raster_point.x) as usize;
 
                 // Check if the raster cell is empty by reading the atomic value without locking
                 //let cell = output[raster_idx as usize];
 
-                if let Some(value) = shader_edge_interpolator(raster_point, [v0, v1, v2], push_constants) {
+                if let Some(value) = shader_edge_interpolator(raster_point, [v0, v1, v2], uniforms) {
                     output[raster_idx as usize] = value;
                 }
 
@@ -70,7 +70,7 @@ pub fn main_cs(
 }
 
 // Not borrowing here as we are not modifying the input
-pub fn shader_edge_interpolator(p: UVec2, v: [UVec3; 3], push_constants: &ShaderPushConstants) -> Option<f32> {
+pub fn shader_edge_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &ShaderUniforms) -> Option<f32> {
     // Wrapping subtraction to avoid casting to signed integers
     // Taking x,y arguments as we have a mix of 2 & 3 dimensional vectors and this avoids casting
     let edge_function = |v0_x: u32, v0_y: u32, v1_x: u32, v1_y: u32, p_x: u32, p_y: u32| -> i32 {
@@ -121,7 +121,7 @@ pub fn shader_edge_interpolator(p: UVec2, v: [UVec3; 3], push_constants: &Shader
 
         // Normalize and map the height
         let normalized_height = interpolated_height / 32767.0;
-        let mapped_height = push_constants.height_min + normalized_height * (push_constants.height_max - push_constants.height_min);
+        let mapped_height = uniforms.height_min + normalized_height * (uniforms.height_max - uniforms.height_min);
 
         Some(mapped_height)
 

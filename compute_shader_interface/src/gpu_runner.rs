@@ -10,10 +10,10 @@ use wgpu::Features;
 // #[repr(C)]
 // #[derive(Copy, Clone, Pod,Zeroable)]
 
-pub struct ShaderPushConstants {
-    pub raster_dim_size: u32,
-    pub height_min: f32,
-    pub height_max: f32,
+pub struct ShaderUniforms {
+    raster_dim_size: u32,
+    height_min: f32,
+    height_max: f32,
 }
 
 
@@ -89,6 +89,31 @@ pub async fn run_compute_shader(
     });
 
     
+    let uniforms = ShaderUniforms {
+        raster_dim_size,
+        height_min: height_range[0],
+        height_max: height_range[1],
+    };
+    
+    // Convert each field to bytes
+    let raster_dim_size_bytes = uniforms.raster_dim_size.to_ne_bytes();
+    let height_min_bytes = uniforms.height_min.to_ne_bytes();
+    let height_max_bytes = uniforms.height_max.to_ne_bytes();
+
+    // Concatenate the byte arrays
+    let mut uniform_bytes = Vec::new();
+    uniform_bytes.extend_from_slice(&raster_dim_size_bytes);
+    uniform_bytes.extend_from_slice(&height_min_bytes);
+    uniform_bytes.extend_from_slice(&height_max_bytes);
+
+      
+    
+    let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Uniform Buffer"),
+        contents: &uniform_bytes,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
 
     // Read the shader file at runtime
 
@@ -116,32 +141,81 @@ pub async fn run_compute_shader(
     });
 
 
-    // Define the push constant range
-    let push_constant_range = wgpu::PushConstantRange {
-        stages: wgpu::ShaderStages::COMPUTE,
-        range: 0..12, // 2 * f32 (4 bytes each) + 1 * u32 (4 bytes) = 12 bytes
-    };
-
       // bind group
       let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            count: None,
-            visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::Buffer {
-                has_dynamic_offset: false,
-                min_binding_size: None,
-                ty: wgpu::BufferBindingType::Storage { read_only: false },
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                    ty: wgpu::BufferBindingType::Uniform,
+                },
+                count: None,
             },
-        }],
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: vertex_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: index_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: output_buffer.as_entire_binding(),
+            },
+        ],
+        label: Some("Compute Bind Group"),
     });
 
     // pipeline
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Compute Pipeline Layout"),
         bind_group_layouts: &[&bind_group_layout],
-        push_constant_ranges: &[push_constant_range],
+        push_constant_ranges: &[],
     });
 
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -153,24 +227,7 @@ pub async fn run_compute_shader(
         entry_point: &entry_point,
     });
 
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: vertex_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: index_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: output_buffer.as_entire_binding(),
-            },
-        ],
-        label: Some("Compute Bind Group"),
-    });
+ 
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Compute Encoder"),
@@ -179,27 +236,6 @@ pub async fn run_compute_shader(
     let mut compute_pass = encoder.begin_compute_pass(&Default::default());
     compute_pass.set_pipeline(&pipeline);
     compute_pass.set_bind_group(0, &bind_group, &[]);
-
-    
-    let push_constants = ShaderPushConstants {
-        raster_dim_size: raster_dim_size,
-        height_min: height_range[0],
-        height_max: height_range[1],
-    };
-
-    // Convert each field to bytes
-    let raster_dim_size_bytes = push_constants.raster_dim_size.to_ne_bytes();
-    let height_min_bytes = push_constants.height_min.to_ne_bytes();
-    let height_max_bytes = push_constants.height_max.to_ne_bytes();
-
-    // Concatenate the byte arrays
-    let mut push_constant_bytes = Vec::new();
-    push_constant_bytes.extend_from_slice(&raster_dim_size_bytes);
-    push_constant_bytes.extend_from_slice(&height_min_bytes);
-    push_constant_bytes.extend_from_slice(&height_max_bytes);
-
-   // compute_pass.set_push_constants(0, bytemuck::bytes_of(&push_constants));
-    compute_pass.set_push_constants(0, &push_constant_bytes);
 
 
     compute_pass.dispatch_workgroups((raster_dim_size + 7) / 8, (raster_dim_size + 7) / 8, 1);
