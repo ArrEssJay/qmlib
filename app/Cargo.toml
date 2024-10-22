@@ -11,6 +11,14 @@ criterion = "0.5.1"
 qmlib = { path = "../lib" }  # Local path to the library
 binrw = "0.14.0"
 nalgebra = "0.33.0"
+wgpu = "22.1.0"
+bytemuck = "1.18.0"
+winit = "0.30.5"
+pollster = "0.3.0"
+geographiclib-rs = "0.2.4"
+geo = "0.28.0"
+
+[features]
 
 [[bin]]
 name = "tile_info"
@@ -31,6 +39,10 @@ path = "src/export_svg.rs"
 [[bin]]
 name = "export_geotiff"
 path = "src/export_geotiff.rs"
+
+[[bin]]
+name = "export_csv"
+path = "src/export_csv.rs"
 
 #[[bin]]
 #name = "compute_shader"

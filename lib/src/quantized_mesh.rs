@@ -15,6 +15,8 @@ pub mod geometry;
 pub mod raster;
 pub mod interpolator;
 
+pub mod raster_gpu;
+
 pub mod test_utils;
 
 // Constants

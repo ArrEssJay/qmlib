@@ -4,4 +4,5 @@
 /test/terrain_data/**/*.kml
 /test/terrain_data/**/*.svg
 /test/terrain_data/**/*.tiff
+.vscode
 

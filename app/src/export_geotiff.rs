@@ -1,4 +1,4 @@
-use qmlib::interpolator::interpolate_height_edge;
+use qmlib::interpolator::InterpolationMethod;
 use qmlib::{quantized_mesh_tile, tiff_writer};
 use std::path::PathBuf;
 use std::env;
@@ -17,12 +17,11 @@ fn main() -> Result<(), String> {
     let path: PathBuf = PathBuf::from(path_str);
     let mut outpath = path.clone();
 
-    let interpolator = interpolate_height_edge;
     let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path)?;
 
     // write to the same location
     outpath.set_extension("tiff");
-    tiff_writer::write_tiff(&tile, &outpath, scale_shift, qmlib::interpolator::InterpolationStrategy::Simple(interpolator)).map_err(|e| format!("Error exporting to GeoTIFF: {}", e))?;
+    tiff_writer::write_tiff(&tile, &outpath, scale_shift, InterpolationMethod::Barycentric).map_err(|e| format!("Error exporting to GeoTIFF: {}", e))?;
 
 
     Ok(())
@@ -30,7 +29,6 @@ fn main() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use qmlib::interpolator::interpolate_height_edge;
 
     use super::*;
     use std::fs;
@@ -42,8 +40,7 @@ mod tests {
         let scale_shift: u16 = 4; 
         let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path).unwrap();
         path.set_extension(".test.tiff");
-        let interpolator = interpolate_height_edge;
-        let result = tiff_writer::write_tiff(&tile, &path, scale_shift, qmlib::interpolator::InterpolationStrategy::Simple(interpolator));
+        let result = tiff_writer::write_tiff(&tile, &path, scale_shift, InterpolationMethod::Barycentric);
         assert!(result.is_ok(), "Failed to write TIFF: {:?}", result.err());
         
         // Clean up test output

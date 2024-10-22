@@ -2,10 +2,20 @@
 resolver = "2"
 members = [
     "app",
-    "lib"
+    "lib",
+    "compute_shader_interface",
+    "compute_shader",
 ]
 
 [profile.release]
 # Optional: Optimize for release builds
 lto = true  # Link Time Optimization
 opt-level = 3 
+
+
+[profile.release.build-override]
+opt-level = 3
+codegen-units = 16
+
+[profile.dev.build-override]
+opt-level = 3

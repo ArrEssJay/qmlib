@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../rust-gpu"
+		}
+	],
+	"settings": {
+		"rust-analyzer.testExplorer": true,
+		"rust-analyzer.cargo.features": [],
+		"rust-analyzer.check.features": [],
+		"rust-analyzer.cargo.noDefaultFeatures": false
+	}
+}
