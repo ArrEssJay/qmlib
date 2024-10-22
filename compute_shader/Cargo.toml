@@ -8,4 +8,5 @@ crate-type = ["dylib"]
 
 
 [dependencies]
+glam = "0.29.0"
 spirv-std = { path = "../../rust-gpu/crates/spirv-std", version = "=0.9.0", features = ["bytemuck"] }

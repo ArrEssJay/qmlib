@@ -1,7 +1,4 @@
 #![cfg_attr(target_arch = "spirv", no_std)]
-// HACK(eddyb) can't easily see warnings otherwise from `spirv-builder` builds.
-#![deny(warnings)]
-
 
 use glam::{UVec2, UVec3};
 use spirv_std::{
@@ -22,7 +19,7 @@ pub fn main_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] uniforms: &ShaderUniforms,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] vertices: &[UVec3],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] indices: &[[u32; 3]],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] output: &mut [f32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] storage: &mut [f32],
 ) {
     for i in 0..vertices.len() {
         let v0 = vertices[indices[i][0] as usize];
@@ -59,7 +56,7 @@ pub fn main_cs(
                 //let cell = output[raster_idx as usize];
 
                 if let Some(value) = shader_edge_interpolator(raster_point, [v0, v1, v2], uniforms) {
-                    output[raster_idx as usize] = value;
+                    storage[raster_idx as usize] = value;
                 }
 
                 raster_point.x += 1;
@@ -67,6 +64,8 @@ pub fn main_cs(
             raster_point.y -= 1;
         }
     }
+    
+
 }
 
 // Not borrowing here as we are not modifying the input

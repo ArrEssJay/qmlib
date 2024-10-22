@@ -16,14 +16,12 @@ pub struct ShaderUniforms {
     height_max: f32,
 }
 
-
-
 pub async fn run_compute_shader(
     raster_dim_size: u32,
     vertices: &[UVec3],
     indices: &[[u32;3]],
     height_range: &[f32;2],
-) -> Vec<u32> {
+) -> Vec<f32> {
     let output_raster_size_bytes =
         (raster_dim_size as u64 * raster_dim_size as u64) * std::mem::size_of::<f32>() as u64;
     // device
@@ -81,10 +79,17 @@ pub async fn run_compute_shader(
         usage: wgpu::BufferUsages::STORAGE,
     });
 
-    let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Output Buffer"),
+    let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Storage Buffer"),
         size: output_raster_size_bytes,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Readback Buffer"),
+        size: output_raster_size_bytes,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
@@ -161,7 +166,7 @@ pub async fn run_compute_shader(
                 ty: wgpu::BindingType::Buffer {
                     has_dynamic_offset: false,
                     min_binding_size: None,
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Storage { read_only: true }, // Set read_only to true
                 },
                 count: None,
             },
@@ -171,7 +176,7 @@ pub async fn run_compute_shader(
                 ty: wgpu::BindingType::Buffer {
                     has_dynamic_offset: false,
                     min_binding_size: None,
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Storage { read_only: true }, // Set read_only to true
                 },
                 count: None,
             },
@@ -205,7 +210,7 @@ pub async fn run_compute_shader(
             },
             wgpu::BindGroupEntry {
                 binding: 3,
-                resource: output_buffer.as_entire_binding(),
+                resource: storage_buffer.as_entire_binding(),
             },
         ],
         label: Some("Compute Bind Group"),
@@ -233,31 +238,49 @@ pub async fn run_compute_shader(
         label: Some("Compute Encoder"),
     });
 
-    let mut compute_pass = encoder.begin_compute_pass(&Default::default());
-    compute_pass.set_pipeline(&pipeline);
-    compute_pass.set_bind_group(0, &bind_group, &[]);
+    // Set up the compute pass
+    // Scope to ensure compute pass is dropped before the buffer is mapped
+    {
+        let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+        compute_pass.set_pipeline(&pipeline);
+        compute_pass.set_bind_group(0, &bind_group, &[]);
 
-
-    compute_pass.dispatch_workgroups((raster_dim_size + 7) / 8, (raster_dim_size + 7) / 8, 1);
+        compute_pass.dispatch_workgroups(raster_dim_size / 8, 1, 1);
+    }
+    // Copy data from the storage buffer to the readback buffer
+    encoder.copy_buffer_to_buffer(
+        &storage_buffer,
+        0,
+        &readback_buffer,
+        0,
+        output_raster_size_bytes,
+    );
 
     queue.submit(Some(encoder.finish()));
+    
 
-    let buffer_slice = output_buffer.slice(..);
+    // init data vec here
+    let buffer_slice = readback_buffer.slice(..);
+
     buffer_slice.map_async(wgpu::MapMode::Read, |r| r.unwrap());
+
+    //change this to add code to the
+    //buffer_slice.map_async(wgpu::MapMode::Read, |r| r.unwrap());
     // NOTE(eddyb) `poll` should return only after the above callbacks fire
     // (see also https://github.com/gfx-rs/wgpu/pull/2698 for more details).
     device.poll(wgpu::Maintain::Wait);
 
     let data = buffer_slice.get_mapped_range();
-    //let result: Vec<u32> = cast_slice(&data).to_vec();
+    let result = data
+        .chunks_exact(4)
+        .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
+        .collect::<Vec<_>>();
+    drop(data);
+    readback_buffer.unmap();
 
-    let result: Vec<u32> = data.chunks_exact(4)
-    .map(|chunk| u32::from_ne_bytes(chunk.try_into().expect("slice with incorrect length")))
-    .collect();
-
-    output_buffer.unmap();
     result
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -274,5 +297,14 @@ mod tests {
 
         // Add assertions to verify the result
         assert_eq!(result.len(), (raster_dim_size * raster_dim_size) as usize);
+        let mut rows: Vec<Vec<f32>> = Vec::with_capacity(raster_dim_size as usize);
+
+        for chunk in result.chunks(raster_dim_size  as usize) {
+            rows.push(chunk.to_vec());
+        }
+
+        for row in rows {
+            println!("{:?}", row);
+        }
     }
 }
