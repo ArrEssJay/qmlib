@@ -78,7 +78,7 @@ pub fn rasterise(
             for _ in 0..(triangle_bounds.upper_right.x -triangle_bounds.lower_left.x)
             {   
                 // index in the flat raster
-                let raster_idx = (raster_y as u32 * raster_dim_size as u32) + raster_point.x as u32;
+                let raster_idx = (raster_point.y as u32 * raster_dim_size as u32) + raster_point.x as u32;
             
                 // Check if the raster cell is empty by reading the atomic value without locking
                 let cell = &raster[raster_idx as usize];

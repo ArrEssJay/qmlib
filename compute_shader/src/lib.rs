@@ -50,7 +50,7 @@ pub fn main_cs(
             raster_point.x = raster_x_origin; // reset scanline x each row
             for _ in 0..(max_x - min_x) {
                 // index in the flat raster
-                let raster_idx = ((raster_y * uniforms.raster_dim_size) + raster_point.x) as usize;
+                let raster_idx = ((raster_point.y * uniforms.raster_dim_size) + raster_point.x) as usize;
 
                 // Check if the raster cell is empty by reading the atomic value without locking
                 //let cell = output[raster_idx as usize];
@@ -58,6 +58,7 @@ pub fn main_cs(
                 if let Some(value) = shader_edge_interpolator(raster_point, [v0, v1, v2], uniforms) {
                     storage[raster_idx as usize] = value;
                 }
+                else { storage[raster_idx as usize] = 123.0;}
 
                 raster_point.x += 1;
             }
@@ -119,6 +120,7 @@ pub fn shader_edge_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &ShaderUnifor
         let interpolated_height = numerator / area_full as f32;
 
         // Normalize and map the height
+        // z scaling factor is always 32767 as we only (sometimes) downsample x and y
         let normalized_height = interpolated_height / 32767.0;
         let mapped_height = uniforms.height_min + normalized_height * (uniforms.height_max - uniforms.height_min);
 
