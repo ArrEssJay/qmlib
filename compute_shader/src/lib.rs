@@ -128,7 +128,9 @@ pub fn calculate_edge_weights(v: [IVec2; 3], p: IVec2) -> [i32;3] {
 // Uses orientation of 3 edges to determine if the point is inside the triangle
 pub fn point_in_triangle(v: [UVec3; 3], p: UVec2) -> bool {
    // Get the xy components of the vertices
-   let v_xy = v.map(|v| v.xy().as_ivec2());
+   //let v_xy = v.map(|v| v.xy().as_ivec2());
+   //RJ - cannot cast between pointer types -- spirv
+   let v_xy: [IVec2; 3] = [v[0].xy().as_ivec2(), v[1].xy().as_ivec2(), v[2].xy().as_ivec2()];
 
    // Correct winding order to CCW if necessary
    let v_xy_ccw = if is_cw(v_xy) {
@@ -167,7 +169,10 @@ pub fn calculate_barycentric_weights(v: [Vec2; 3], p: Vec2) -> [f32;3] {
 // Interpolate the height of a point p inside the triangle formed by vertices v
 pub fn interpolate_barycentric(v: [Vec3; 3], p: Vec2,  uniforms: &ShaderUniforms) -> Option<f32> {
    
-   let wb = calculate_barycentric_weights(v.map(|v| v.xy()), p);
+   // RJ - error casting pointers spirv
+   //let wb = calculate_barycentric_weights(v.map(|v| v.xy()), p);
+   let v_xy: [Vec2; 3] = [v[0].xy(), v[1].xy(), v[2].xy()];
+   let wb = calculate_barycentric_weights(v_xy, p);
 
    // Not checking weights as we have already decided that the point is inside the triangle
    let numerator = wb[0]* v[0].z + wb[1] * v[1].z + wb[2] * v[2].z; // 131068
@@ -188,7 +193,12 @@ pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &Sha
    if point_in_triangle(v, p) {
        // Interpolate the z value using barycentric coordinates
        // work in double precision and reduce for output
-       interpolate_barycentric(v.map(|v| v.as_vec3()), p.as_vec2(), uniforms)
+
+    //interpolate_barycentric(v.map(|v| v.as_vec3()), p.as_vec2(), uniforms)
+    // RJ - error casting pointers spirv
+
+    let v_vec3: [Vec3; 3] = [v[0].as_vec3(), v[1].as_vec3(), v[2].as_vec3()];
+    interpolate_barycentric(v_vec3, p.as_vec2(), uniforms)
    } else {
        None
    }

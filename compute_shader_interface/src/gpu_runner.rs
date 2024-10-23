@@ -290,8 +290,8 @@ mod tests {
     async fn test_run_compute_shader() {
         let raster_dim_size = 256;
         let height_range =[100.0f32,200.0f32];
-        let vertices = vec![UVec3::new(0, 0,100), UVec3::new(0, 255,200), UVec3::new(255, 0,0)];
-        let indices = [[0, 1, 2]];
+        let vertices: Vec<UVec3> = vec![UVec3::new(0, 0,0), UVec3::new(0, 255,0), UVec3::new(255, 255,0), UVec3::new(255, 0,0)];
+        let indices = [[1,2,3],[0, 1, 2]];
 
         let result = run_compute_shader(raster_dim_size, &vertices, &indices, &height_range).await;
 
