@@ -8,6 +8,10 @@ use spirv_std::{
 use spirv_std::num_traits::Float;
 use spirv_std::arch::atomic_f_add;
 
+
+mod bvh;
+
+
 pub struct RasterParameters {
     raster_dim_size: u32,
     height_min: f32,
