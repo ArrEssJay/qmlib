@@ -7,14 +7,14 @@ use spirv_std::{
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 
-pub struct ShaderUniforms {
+pub struct RasterParameters {
     raster_dim_size: u32,
     height_min: f32,
     height_max: f32,
 }
 #[allow(dead_code)]
 // Used in tests
-impl ShaderUniforms {
+impl RasterParameters {
     fn new(raster_dim_size: u32, height_min: f32, height_max: f32) -> Self {
         Self {
             raster_dim_size,
@@ -24,85 +24,114 @@ impl ShaderUniforms {
     }
 }
 
-
 // Workgroup size is 8x8x1 (x,y,z)
-#[spirv(compute(threads(256)))]
+#[spirv(compute(threads(8, 8, 1)))]
 pub fn main_cs(
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] uniforms: &ShaderUniforms,
+    #[spirv(global_invocation_id)] global_id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] params: &RasterParameters,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] vertices: &[UVec3],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] indices: &[[u32; 3]],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] storage: &mut [f32],
 ) {
-   build_raster(uniforms, vertices, indices, storage);
+
+    //let global_index = global_id.x + global_id.y * workgroup_size_x + global_id.z * (workgroup_size_x * workgroup_size_y);
+    let global_index = global_id.x + global_id.y * 8 + global_id.z * 64;
+
+    if global_index < indices.len() as u32 {
+        rasterise_triangle(params, vertices,indices,storage, global_index as usize);
+    }
 }
 
+#[allow(unused_variables)]
+pub fn rasterise_hello(
+    params: &RasterParameters,
+    vertices: &[UVec3],
+    indices: &[[u32; 3]],
+    storage: &mut [f32],
+    index: usize,
+) {
+
+    // Simplified logic: set a specific index in the storage buffer to a non-zero value
+    storage[index] =index as f32;
+}
+
+// Run the rasterisation algorithm on the CPU
 pub fn build_raster(
-    uniforms: &ShaderUniforms,
-  vertices: &[UVec3],
+    params: &RasterParameters,
+    vertices: &[UVec3],
     indices: &[[u32; 3]],
     storage: &mut [f32],
 ) {
-   for i in 0..indices.len() {
-       let v0 = vertices[indices[i][0] as usize];
-       let v1 = vertices[indices[i][1] as usize];
-       let v2 = vertices[indices[i][2] as usize];
+   for index in 0..indices.len() {
+    rasterise_triangle(params, vertices,indices,storage, index)
+    }
+}
 
-       // Determine the bounding box of the triangle
-       let ( min_x,  min_y,  max_x,  max_y): (u32,u32,u32,u32);
-       #[cfg(not(target_arch = "spirv"))]
-       {
-           use std::cmp::{max, min};
+pub fn rasterise_triangle( params: &RasterParameters,
+    vertices: &[UVec3],
+    indices: &[[u32; 3]],
+    storage: &mut [f32],
+    index: usize) {
+    let v0 = vertices[indices[index][0] as usize];
+    let v1 = vertices[indices[index][1] as usize];
+    let v2 = vertices[indices[index][2] as usize];
 
-           min_x = min(min(v0.x, v1.x), v2.x);
-           min_y = min(min(v0.y, v1.y), v2.y);
-           
-           max_x = max(max(v0.x, v1.x), v2.x);
-           max_y = max(max(v0.y, v1.y), v2.y);
-       }
-       #[cfg(target_arch = "spirv")]
-       {
-           use spirv_std::arch::{unsigned_max, unsigned_min};
+    // Determine the bounding box of the triangle
+    let ( min_x,  min_y,  max_x,  max_y): (u32,u32,u32,u32);
+    #[cfg(not(target_arch = "spirv"))]
+    {
+        use std::cmp::{max, min};
 
-           min_x = unsigned_min(unsigned_min(v0.x, v1.x), v2.x);
-           min_y = unsigned_min(unsigned_min(v0.y, v1.y), v2.y);
+        min_x = min(min(v0.x, v1.x), v2.x);
+        min_y = min(min(v0.y, v1.y), v2.y);
+        
+        max_x = max(max(v0.x, v1.x), v2.x);
+        max_y = max(max(v0.y, v1.y), v2.y);
+    }
+    #[cfg(target_arch = "spirv")]
+    {
+        use spirv_std::arch::{unsigned_max, unsigned_min};
 
-           max_x = unsigned_max(unsigned_max(v0.x, v1.x), v2.x);
-           max_y = unsigned_max(unsigned_max(v0.y, v1.y), v2.y);
-       }
+        min_x = unsigned_min(unsigned_min(v0.x, v1.x), v2.x);
+        min_y = unsigned_min(unsigned_min(v0.y, v1.y), v2.y);
 
-       // for dim_size=32768 max_x = 32767, max_y = 32767
-       assert!(max_x > 0);
-       assert!(max_y > 0);
-       assert!(max_x < uniforms.raster_dim_size);
-       assert!(max_y < uniforms.raster_dim_size);
+        max_x = unsigned_max(unsigned_max(v0.x, v1.x), v2.x);
+        max_y = unsigned_max(unsigned_max(v0.y, v1.y), v2.y);
+    }
+
+    // for dim_size=32768 max_x = 32767, max_y = 32767
+    assert!(max_x > 0);
+    assert!(max_y > 0);
+    assert!(max_x < params.raster_dim_size);
+    assert!(max_y < params.raster_dim_size);
 
 
-       // Build 2D point with the location of the top left corner of the bounding box
-       // Inverted y-axis. Note the decrementing y line counter
-       let  mut raster_point: UVec2 = UVec2::new(min_x,  uniforms.raster_dim_size - 1 - min_y);
+    // Build 2D point with the location of the top left corner of the bounding box
+    // Inverted y-axis. Note the decrementing y line counter
+    let  mut raster_point: UVec2 = UVec2::new(min_x,  params.raster_dim_size - 1 - min_y);
 
-       // NaN bit pattern
-       //let f32_bits_nan = f32::to_bits(f32::NAN);
+    // NaN bit pattern
+    //let f32_bits_nan = f32::to_bits(f32::NAN);
 
-       for _i in min_y..=max_y
-       // range is inclusive..exclusive
-       {
-           raster_point.x = min_x; // reset scanline x each row
-           for _j in min_x..=max_x {
-               // index in the flat raster
-               let raster_idx = ((raster_point.y * uniforms.raster_dim_size) + raster_point.x) as usize;
+    for _i in min_y..=max_y
+    // range is inclusive..exclusive
+    {
+        raster_point.x = min_x; // reset scanline x each row
+        for _j in min_x..=max_x {
+            // index in the flat raster
+            let raster_idx = ((raster_point.y * params.raster_dim_size) + raster_point.x) as usize;
 
-               // Check if the raster cell is empty by reading the atomic value without locking
-               if let Some(value) = triangle_face_height_interpolator(raster_point, [v0, v1, v2], uniforms) {
-                   
-                   storage[raster_idx as usize] =value as f32;
-               }
-               raster_point.x += 1;
-           }
-           if raster_point.y > 0 {raster_point.y -= 1;}  //avoid underflow on min_y=0
-          
-       }
-   }
+            // Check if the raster cell is empty by reading the atomic value without locking
+            if let Some(value) = triangle_face_height_interpolator(raster_point, [v0, v1, v2], params) {
+                
+                storage[raster_idx as usize] =value as f32;
+            }
+            raster_point.x += 1;
+        }
+        if raster_point.y > 0 {raster_point.y -= 1;}  //avoid underflow on min_y=0
+       
+    }
+
 }
 
 // Is v2 inside the edge formed by v0 and v1
@@ -167,7 +196,7 @@ pub fn calculate_barycentric_weights(v: [Vec2; 3], p: Vec2) -> [f32;3] {
 }
 
 // Interpolate the height of a point p inside the triangle formed by vertices v
-pub fn interpolate_barycentric(v: [Vec3; 3], p: Vec2,  uniforms: &ShaderUniforms) -> Option<f32> {
+pub fn interpolate_barycentric(v: [Vec3; 3], p: Vec2,  params: &RasterParameters) -> Option<f32> {
    
    // RJ - error casting pointers spirv
    //let wb = calculate_barycentric_weights(v.map(|v| v.xy()), p);
@@ -179,12 +208,12 @@ pub fn interpolate_barycentric(v: [Vec3; 3], p: Vec2,  uniforms: &ShaderUniforms
 
    // Normalize and map the height. Unmapped range is 0-32767
    let normalized_height = numerator / 32767.;
-   let mapped_height = uniforms.height_min + normalized_height * (uniforms.height_max - uniforms.height_min);
+   let mapped_height = params.height_min + normalized_height * (params.height_max - params.height_min);
    Some(mapped_height)
 }
 
 
-pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &ShaderUniforms) -> Option<f32> {
+pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], params: &RasterParameters) -> Option<f32> {
   
    // Check if the point is inside the triangle (all weights must be non-negative)
    // using integer edge function weights. This avoids floating point precision issues.
@@ -194,11 +223,11 @@ pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &Sha
        // Interpolate the z value using barycentric coordinates
        // work in double precision and reduce for output
 
-    //interpolate_barycentric(v.map(|v| v.as_vec3()), p.as_vec2(), uniforms)
+    //interpolate_barycentric(v.map(|v| v.as_vec3()), p.as_vec2(), params)
     // RJ - error casting pointers spirv
 
     let v_vec3: [Vec3; 3] = [v[0].as_vec3(), v[1].as_vec3(), v[2].as_vec3()];
-    interpolate_barycentric(v_vec3, p.as_vec2(), uniforms)
+    interpolate_barycentric(v_vec3, p.as_vec2(), params)
    } else {
        None
    }
@@ -392,7 +421,7 @@ mod tests {
 
    #[test]
    fn test_shader_edge_interpolator_inside_triangle_zero_plane() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(1, 1);
        let v = [
@@ -401,14 +430,14 @@ mod tests {
            UVec3::new(3, 0, 0),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_some());
        assert_eq!(result.unwrap(), 0.);
    }
 
    #[test]
    fn test_shader_edge_interpolator_inside_triangle_different_z() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(1, 1);
        let v = [
@@ -417,14 +446,14 @@ mod tests {
            UVec3::new(3, 0, 16383),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_some());
        assert_abs_diff_eq!(result.unwrap(), 0.5, epsilon = 1e-5);
    }
 
    #[test]
    fn test_shader_edge_interpolator_on_edge_different_z() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(1, 1);
        let v = [
@@ -433,7 +462,7 @@ mod tests {
            UVec3::new(2, 0, 16383),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_some());
        assert_abs_diff_eq!(result.unwrap(), 0.75, epsilon = 1e-5);
    }
@@ -441,7 +470,7 @@ mod tests {
 
    #[test]
    fn test_shader_edge_interpolator_outside_triangle() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(3, 3);
        let v = [
@@ -450,13 +479,13 @@ mod tests {
            UVec3::new(0, 2, 32767),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_none());
    }
 
    #[test]
    fn test_shader_edge_interpolator_at_vertex_different_z() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(0, 0);
        let v = [
@@ -465,14 +494,14 @@ mod tests {
            UVec3::new(2, 0, 16383),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_some());
        assert_eq!(result.unwrap(), 0.);
    }
 
    #[test]
    fn test_shader_edge_interpolator_on_edge() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(1, 0);
        let v = [
@@ -481,14 +510,14 @@ mod tests {
            UVec3::new(0, 2, 32767),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_some());
        assert_eq!(result.unwrap(), 0.5);
    }
 
    #[test]
    fn test_shader_edge_interpolator_at_vertex() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(0, 0);
        let v = [
@@ -497,14 +526,14 @@ mod tests {
            UVec3::new(0, 2, 32767),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_some());
        assert_eq!(result.unwrap(), 0.);
    }
 
    #[test]
    fn test_shader_edge_interpolator_degenerate_triangle() {
-       let uniforms = ShaderUniforms::new(100, 0., 1.);
+       let params = RasterParameters::new(100, 0., 1.);
 
        let p = UVec2::new(1, 1);
        let v = [
@@ -513,7 +542,7 @@ mod tests {
            UVec3::new(0, 0, 32767),
        ];
 
-       let result = triangle_face_height_interpolator(p, v, &uniforms);
+       let result = triangle_face_height_interpolator(p, v, &params);
        assert!(result.is_none());
    }
 
@@ -521,7 +550,7 @@ mod tests {
    #[test]
    // The vertex positions are expected to be pre-scaled so as to be in the range of the raster size
    fn test_raster_plane() {
-       let uniforms = ShaderUniforms {
+       let params = RasterParameters {
            raster_dim_size: 4,
            height_min: 0.,
            height_max: 100.,
@@ -539,9 +568,9 @@ mod tests {
            [0, 2, 3],
        ];
 
-       let mut storage = vec![-1.; (uniforms.raster_dim_size * uniforms.raster_dim_size) as usize];
+       let mut storage = vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
 
-       build_raster(&uniforms, &vertices, &indices, &mut storage);
+       build_raster(&params, &vertices, &indices, &mut storage);
       
        let expected_output = vec![
        0.0, 33.333336, 66.66667, 100.0,
@@ -552,5 +581,5 @@ mod tests {
    assert_abs_diff_eq!(expected_output.as_slice(), storage.as_slice(), epsilon = 1e-5);
 
    }
-
+   
 }

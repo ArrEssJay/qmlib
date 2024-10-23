@@ -10,20 +10,19 @@ use wgpu::Features;
 // #[repr(C)]
 // #[derive(Copy, Clone, Pod,Zeroable)]
 
-pub struct ShaderUniforms {
+pub struct RasterParameters {
     raster_dim_size: u32,
     height_min: f32,
     height_max: f32,
 }
 
 pub async fn run_compute_shader(
-    raster_dim_size: u32,
     vertices: &[UVec3],
     indices: &[[u32;3]],
-    height_range: &[f32;2],
+    params: &RasterParameters,
 ) -> Vec<f32> {
     let output_raster_size_bytes =
-        (raster_dim_size as u64 * raster_dim_size as u64) * std::mem::size_of::<f32>() as u64;
+        (params.raster_dim_size as u64 * params.raster_dim_size as u64) * std::mem::size_of::<f32>() as u64;
     // device
     let backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -94,16 +93,10 @@ pub async fn run_compute_shader(
     });
 
     
-    let uniforms = ShaderUniforms {
-        raster_dim_size,
-        height_min: height_range[0],
-        height_max: height_range[1],
-    };
-    
     // Convert each field to bytes
-    let raster_dim_size_bytes = uniforms.raster_dim_size.to_ne_bytes();
-    let height_min_bytes = uniforms.height_min.to_ne_bytes();
-    let height_max_bytes = uniforms.height_max.to_ne_bytes();
+    let raster_dim_size_bytes = params.raster_dim_size.to_ne_bytes();
+    let height_min_bytes = params.height_min.to_ne_bytes();
+    let height_max_bytes = params.height_max.to_ne_bytes();
 
     // Concatenate the byte arrays
     let mut uniform_bytes = Vec::new();
@@ -111,10 +104,9 @@ pub async fn run_compute_shader(
     uniform_bytes.extend_from_slice(&height_min_bytes);
     uniform_bytes.extend_from_slice(&height_max_bytes);
 
-      
     
     let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Uniform Buffer"),
+        label: Some("Raster Parameters"),
         contents: &uniform_bytes,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
@@ -235,8 +227,14 @@ pub async fn run_compute_shader(
  
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Compute Encoder"),
+        label: Some("Command Encoder"),
     });
+
+    // Calculate the number of workgroups needed
+    let num_triangles = indices.len() as u32;
+    let workgroup_size = 8 * 8; // 64 threads per workgroup
+    let num_workgroups = (num_triangles + workgroup_size - 1) / workgroup_size;
+    println!("num_triangles: {}, workgroup_size: {}, num_workgroups:{}", num_triangles, workgroup_size, num_workgroups);
 
     // Set up the compute pass
     // Scope to ensure compute pass is dropped before the buffer is mapped
@@ -245,7 +243,7 @@ pub async fn run_compute_shader(
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
 
-        compute_pass.dispatch_workgroups(raster_dim_size / 8, 1, 1);
+        compute_pass.dispatch_workgroups(num_workgroups, 1, 1);
     }
     // Copy data from the storage buffer to the readback buffer
     encoder.copy_buffer_to_buffer(
@@ -288,18 +286,30 @@ mod tests {
 
     #[async_std::test]
     async fn test_run_compute_shader() {
-        let raster_dim_size = 256;
-        let height_range =[100.0f32,200.0f32];
-        let vertices: Vec<UVec3> = vec![UVec3::new(0, 0,0), UVec3::new(0, 255,0), UVec3::new(255, 255,0), UVec3::new(255, 0,0)];
-        let indices = [[1,2,3],[0, 1, 2]];
+        let params = RasterParameters {
+            raster_dim_size: 64,
+            height_min: 0.,
+            height_max: 100.,
+        };
+        let vertices = vec![
+           UVec3::new(0, 0, 0),
+           UVec3::new(0, 63, 0),
+           UVec3::new(63, 63, 32767),
+           UVec3::new(63, 0, 32767),
+       ]; 
 
-        let result = run_compute_shader(raster_dim_size, &vertices, &indices, &height_range).await;
+       let indices = vec![
+           [0, 1, 2],
+           [0, 2, 3],
+       ];
+
+        let result = run_compute_shader(&vertices, &indices, &params).await;
 
         // Add assertions to verify the result
-        assert_eq!(result.len(), (raster_dim_size * raster_dim_size) as usize);
-        let mut rows: Vec<Vec<f32>> = Vec::with_capacity(raster_dim_size as usize);
+        assert_eq!(result.len(), (params.raster_dim_size * params.raster_dim_size) as usize);
+        let mut rows: Vec<Vec<f32>> = Vec::with_capacity(params.raster_dim_size as usize);
 
-        for chunk in result.chunks(raster_dim_size  as usize) {
+        for chunk in result.chunks(params.raster_dim_size  as usize) {
             rows.push(chunk.to_vec());
         }
 
