@@ -1,19 +1,21 @@
 #![cfg_attr(target_arch = "spirv", no_std)]
 
 use spirv_std::{
-    glam::{ DVec2, DVec3, IVec2, UVec2, UVec3, Vec3Swizzles}, spirv,
+    glam::{ Vec2, Vec3, IVec2, UVec2, UVec3, Vec3Swizzles}, spirv,
 };
 
+#[allow(unused_imports)]
+use spirv_std::num_traits::Float;
 
 pub struct ShaderUniforms {
     raster_dim_size: u32,
-    height_min: f64,
-    height_max: f64,
+    height_min: f32,
+    height_max: f32,
 }
 #[allow(dead_code)]
 // Used in tests
 impl ShaderUniforms {
-    fn new(raster_dim_size: u32, height_min: f64, height_max: f64) -> Self {
+    fn new(raster_dim_size: u32, height_min: f32, height_max: f32) -> Self {
         Self {
             raster_dim_size,
             height_min,
@@ -97,7 +99,8 @@ pub fn build_raster(
                }
                raster_point.x += 1;
            }
-           raster_point.y = raster_point.y.saturating_sub(1); //avoid underflow on min_y=0
+           if raster_point.y > 0 {raster_point.y -= 1;}  //avoid underflow on min_y=0
+          
        }
    }
 }
@@ -148,7 +151,7 @@ pub fn point_in_triangle(v: [UVec3; 3], p: UVec2) -> bool {
 }
 
 // Calculate the barycentric weights for a point p
-pub fn calculate_barycentric_weights(v: [DVec2; 3], p: DVec2) -> [f64;3] {
+pub fn calculate_barycentric_weights(v: [Vec2; 3], p: Vec2) -> [f32;3] {
 
    let area_abc = (v[1] - v[0]).perp_dot(v[2] - v[0]).abs();
    let area_pbc = (v[1] - p).perp_dot(v[2] - p).abs();
@@ -162,7 +165,7 @@ pub fn calculate_barycentric_weights(v: [DVec2; 3], p: DVec2) -> [f64;3] {
 }
 
 // Interpolate the height of a point p inside the triangle formed by vertices v
-pub fn interpolate_barycentric(v: [DVec3; 3], p: DVec2,  uniforms: &ShaderUniforms) -> Option<f64> {
+pub fn interpolate_barycentric(v: [Vec3; 3], p: Vec2,  uniforms: &ShaderUniforms) -> Option<f32> {
    
    let wb = calculate_barycentric_weights(v.map(|v| v.xy()), p);
 
@@ -176,7 +179,7 @@ pub fn interpolate_barycentric(v: [DVec3; 3], p: DVec2,  uniforms: &ShaderUnifor
 }
 
 
-pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &ShaderUniforms) -> Option<f64> {
+pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &ShaderUniforms) -> Option<f32> {
   
    // Check if the point is inside the triangle (all weights must be non-negative)
    // using integer edge function weights. This avoids floating point precision issues.
@@ -185,7 +188,7 @@ pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &Sha
    if point_in_triangle(v, p) {
        // Interpolate the z value using barycentric coordinates
        // work in double precision and reduce for output
-       interpolate_barycentric(v.map(|v| v.as_dvec3()), p.as_dvec2(), uniforms)
+       interpolate_barycentric(v.map(|v| v.as_vec3()), p.as_vec2(), uniforms)
    } else {
        None
    }
@@ -313,10 +316,10 @@ mod tests {
 
    #[test]
    fn test_barycentric_weights_inside_triangle() {
-       let v0 = DVec2::new(0., 0.);
-       let v1 = DVec2::new(0., 3.);
-       let v2 = DVec2::new(3., 0.);
-       let p = DVec2::new(1., 1.);
+       let v0 = Vec2::new(0., 0.);
+       let v1 = Vec2::new(0., 3.);
+       let v2 = Vec2::new(3., 0.);
+       let p = Vec2::new(1., 1.);
 
        let w = calculate_barycentric_weights([v0, v1, v2], p);
        assert_eq!(w[0],1./3.);
@@ -327,10 +330,10 @@ mod tests {
 
    #[test]
    fn test_barycentric_weights_on_edge() {
-       let v0 = DVec2::new(0., 0.);
-       let v1 = DVec2::new(0., 3.);
-       let v2 = DVec2::new(3., 0.);
-       let p = DVec2::new(1., 0.);
+       let v0 = Vec2::new(0., 0.);
+       let v1 = Vec2::new(0., 3.);
+       let v2 = Vec2::new(3., 0.);
+       let p = Vec2::new(1., 0.);
        let w = calculate_barycentric_weights([v0, v1, v2], p);
        assert_eq!(w[0],2./3.);
        assert_eq!(w[1],0.);
@@ -340,10 +343,10 @@ mod tests {
    #[test]
    fn test_barycentric_weights_epsilon_outside() {
        //this point is outside the triangle but is determined to be inside due to floating point precision
-       let v0 = DVec2::new(0., 0.);
-       let v1 = DVec2::new(0., 32767.);
-       let v2 = DVec2::new(1., 16384.);
-       let p = DVec2::new(1., 16383.);
+       let v0 = Vec2::new(0., 0.);
+       let v1 = Vec2::new(0., 32767.);
+       let v2 = Vec2::new(1., 16384.);
+       let p = Vec2::new(1., 16383.);
 
        let w = calculate_barycentric_weights([v0, v1, v2], p);
        assert_abs_diff_eq!(w[0],0., epsilon = 1e-4);
@@ -353,10 +356,10 @@ mod tests {
 
    #[test]
    fn test_barycentric_weights_at_vertex() {
-       let v0 = DVec2::new(0., 0.);
-       let v1 = DVec2::new(2., 0.);
-       let v2 = DVec2::new(0., 2.);
-       let p = DVec2::new(0., 0.);
+       let v0 = Vec2::new(0., 0.);
+       let v1 = Vec2::new(2., 0.);
+       let v2 = Vec2::new(0., 2.);
+       let p = Vec2::new(0., 0.);
 
        let w = calculate_barycentric_weights([v0,v1,v2], p);
        assert_eq!(w[0],1.);
@@ -366,10 +369,10 @@ mod tests {
 
    #[test]
    fn test_barycentric_weights_outside_triangle() {
-       let v0 = DVec2::new(0., 0.);
-       let v1 = DVec2::new(2., 0.);
-       let v2 = DVec2::new(0., 2.);
-       let p = DVec2::new(5., 5.);
+       let v0 = Vec2::new(0., 0.);
+       let v1 = Vec2::new(2., 0.);
+       let v2 = Vec2::new(0., 2.);
+       let p = Vec2::new(5., 5.);
 
        let w = calculate_barycentric_weights([v0,v1,v2], p);
        assert_eq!(w[0],4.);
