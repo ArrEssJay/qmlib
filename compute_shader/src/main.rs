@@ -6,6 +6,8 @@ pub struct ShaderUniforms {
     height_max: f64,
 }
 
+#[allow(dead_code)]
+// Used in tests
 impl ShaderUniforms {
     fn new(raster_dim_size: u32, height_min: f64, height_max: f64) -> Self {
         Self {
@@ -96,7 +98,7 @@ pub fn edge_function(v: [IVec2;3]) -> i32 {
 }
 
 // Are the vertices in cw order
-// // Use the determinant to check orientation
+// Use the determinant to check orientation
 pub fn is_cw(v: [IVec2; 3]) -> bool {
     (v[1].x -v[0].x) * (v[2].y -v[0].y) > (v[2].x - v[0].x) * (v[1].y - v[0].y)
 }
@@ -109,7 +111,8 @@ pub fn calculate_edge_weights(v: [IVec2; 3], p: IVec2) -> [i32;3] {
    
 }
 
-
+// Is the point p inside the triangle formed by vertices v
+// Uses orientation of 3 edges to determine if the point is inside the triangle
 pub fn point_in_triangle(v: [UVec3; 3], p: UVec2) -> bool {
     // Get the xy components of the vertices
     let v_xy = v.map(|v| v.xy().as_ivec2());
@@ -134,6 +137,7 @@ pub fn point_in_triangle(v: [UVec3; 3], p: UVec2) -> bool {
     return w[0] >= 0 && w[1] >= 0 && w[2] >= 0;
 }
 
+// Calculate the barycentric weights for a point p
 pub fn calculate_barycentric_weights(v: [DVec2; 3], p: DVec2) -> [f64;3] {
 
     let area_abc = (v[1] - v[0]).perp_dot(v[2] - v[0]).abs();
@@ -147,6 +151,7 @@ pub fn calculate_barycentric_weights(v: [DVec2; 3], p: DVec2) -> [f64;3] {
 
 }
 
+// Interpolate the height of a point p inside the triangle formed by vertices v
 pub fn interpolate_barycentric(v: [DVec3; 3], p: DVec2,  uniforms: &ShaderUniforms) -> Option<f64> {
     
     let wb = calculate_barycentric_weights(v.map(|v| v.xy()), p);
@@ -159,6 +164,7 @@ pub fn interpolate_barycentric(v: [DVec3; 3], p: DVec2,  uniforms: &ShaderUnifor
     let mapped_height = uniforms.height_min + normalized_height * (uniforms.height_max - uniforms.height_min);
     Some(mapped_height)
 }
+
 
 pub fn triangle_face_height_interpolator(p: UVec2, v: [UVec3; 3], uniforms: &ShaderUniforms) -> Option<f64> {
    
