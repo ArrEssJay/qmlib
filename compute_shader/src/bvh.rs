@@ -21,15 +21,15 @@ pub struct BVH {
     root: BVHNode,
 }
 
-#[derive( PartialEq)]
-pub enum Axis  {
+#[derive(PartialEq)]
+pub enum Axis {
     X,
     Y,
 }
 
+// Bounding Volume Hierachy (BVH) implementation
+// Allows for quick intersection tests between a block of pixels and a list of triangles
 impl BVH {
-    
-    //  initializes the construction of a Bounding Volume Hierarchy (BVH) from a list of vertices and indices
     pub fn build(vertices: &[UVec3], indices: &[[u32; 3]]) -> Self {
         let mut triangle_indices: Vec<usize> = (0..indices.len()).collect();
         let root = Self::build_recursive(vertices, indices, &mut triangle_indices);
@@ -41,7 +41,6 @@ impl BVH {
         indices: &[[u32; 3]],
         triangle_indices: &mut [usize],
     ) -> BVHNode {
-
         if triangle_indices.is_empty() {
             return BVHNode {
                 bounding_box: AABB {
@@ -78,16 +77,24 @@ impl BVH {
             },
         );
 
-        let axis = if bounding_box.max.x - bounding_box.min.x > bounding_box.max.y - bounding_box.min.y {
-            Axis::X
-        } else {
-            Axis::Y
-        };
+        let axis =
+            if bounding_box.max.x - bounding_box.min.x > bounding_box.max.y - bounding_box.min.y {
+                Axis::X
+            } else {
+                Axis::Y
+            };
 
         triangle_indices.sort_by_key(|&i| {
             let triangle = &indices[i];
-            let centroid = (vertices[triangle[0] as usize] + vertices[triangle[1] as usize] + vertices[triangle[2] as usize]) / 3;
-            if axis == Axis::X { centroid.x } else { centroid.y }
+            let centroid = (vertices[triangle[0] as usize]
+                + vertices[triangle[1] as usize]
+                + vertices[triangle[2] as usize])
+                / 3;
+            if axis == Axis::X {
+                centroid.x
+            } else {
+                centroid.y
+            }
         });
 
         let mid = triangle_indices.len() / 2;
@@ -95,13 +102,20 @@ impl BVH {
 
         BVHNode {
             bounding_box,
-            left: Some(Box::new(Self::build_recursive(vertices, indices, left_indices))),
-            right: Some(Box::new(Self::build_recursive(vertices, indices, right_indices))),
+            left: Some(Box::new(Self::build_recursive(
+                vertices,
+                indices,
+                left_indices,
+            ))),
+            right: Some(Box::new(Self::build_recursive(
+                vertices,
+                indices,
+                right_indices,
+            ))),
             triangles: vec![],
         }
     }
-
-    pub fn find_intersecting_triangles(&self, x: u32, y: u32, size: u32) -> Vec<usize> {
+    pub fn find_intersecting_triangles(&self, x: u32, y: u32, size: u32) -> Vec<(AABB, usize)> {
         let block_aabb = AABB {
             min: UVec2::new(x, y),
             max: UVec2::new(x + size - 1, y + size - 1),
@@ -111,7 +125,7 @@ impl BVH {
         result
     }
 
-    fn traverse(&self, node: &BVHNode, block_aabb: &AABB, result: &mut Vec<usize>) {
+    fn traverse(&self, node: &BVHNode, block_aabb: &AABB, result: &mut Vec<(AABB, usize)>) {
         if !self.aabb_intersects(&node.bounding_box, block_aabb) {
             return;
         }
@@ -124,7 +138,9 @@ impl BVH {
                 self.traverse(right, block_aabb, result);
             }
         } else {
-            result.extend(&node.triangles);
+            for &triangle_index in &node.triangles {
+                result.push((node.bounding_box, triangle_index));
+            }
         }
     }
 
@@ -151,11 +167,9 @@ impl BVH {
             println!("{}  Triangles: {:?}", indent, node.triangles);
         }
     }
-    
 }
 
 fn calculate_aabb(vertices: &[UVec3], indices: &[u32; 3]) -> AABB {
-
     let v0 = vertices[indices[0] as usize];
     let v1 = vertices[indices[1] as usize];
     let v2 = vertices[indices[2] as usize];
@@ -457,17 +471,107 @@ mod tests {
     fn test_bvh() {
         let mut vertices = vec![];
         let mut indices = vec![];
-        for i in 1..500{
+        for i in 1..500 {
             vertices.push(UVec3::new(i, i, 0));
             vertices.push(UVec3::new(i + 1, i, 0));
-            vertices.push(UVec3::new(i, i+1, 0));
-            indices.push([(i-1) * 3, (i-1) * 3 + 1, (i-1) * 3 + 2]);
+            vertices.push(UVec3::new(i, i + 1, 0));
+            indices.push([(i - 1) * 3, (i - 1) * 3 + 1, (i - 1) * 3 + 2]);
         }
-        
+
         let bvh = BVH::build(&vertices, &indices);
 
-        let intersecting_triangles: Vec<usize> = bvh.find_intersecting_triangles(10, 10, 1);
+        let intersecting_triangles = bvh.find_intersecting_triangles(10, 10, 1);
         assert_eq!(intersecting_triangles.len(), 2);
     }
 
+    // Below are essentially the same tests as above, but with the additional check of the bounding box and
+    // triangle parameters rather than simply their presence in the result
+    #[test]
+    fn test_find_intersecting_triangles_bbox() {
+        let vertices = vec![
+            UVec3::new(0, 0, 0),
+            UVec3::new(1, 0, 0),
+            UVec3::new(0, 1, 0),
+            UVec3::new(1, 1, 0),
+            UVec3::new(2, 2, 0),
+            UVec3::new(3, 2, 0),
+            UVec3::new(2, 3, 0),
+        ];
+        let indices = vec![[0, 1, 2], [1, 2, 3], [4, 5, 6]];
+        let bvh = BVH::build(&vertices, &indices);
+
+        let intersecting_triangles = bvh.find_intersecting_triangles(0, 0, 2);
+        assert_eq!(intersecting_triangles.len(), 2);
+
+        for (aabb, triangle_index) in intersecting_triangles {
+            let triangle = &indices[triangle_index];
+            let expected_aabb = calculate_aabb(&vertices, triangle);
+            assert_eq!(aabb, expected_aabb);
+        }
+    }
+    #[test]
+    fn test_find_intersecting_triangles_partial_overlap_bbox() {
+        let vertices = vec![
+            UVec3::new(0, 0, 0),
+            UVec3::new(1, 0, 0),
+            UVec3::new(0, 1, 0),
+            UVec3::new(1, 1, 0),
+            UVec3::new(2, 2, 0),
+            UVec3::new(3, 2, 0),
+            UVec3::new(2, 3, 0),
+        ];
+        let indices = vec![[0, 1, 2], [1, 2, 3], [4, 5, 6]];
+        let bvh = BVH::build(&vertices, &indices);
+
+        let intersecting_triangles = bvh.find_intersecting_triangles(1, 1, 2);
+        assert_eq!(intersecting_triangles.len(), 3);
+
+        for (aabb, triangle_index) in intersecting_triangles {
+            let triangle = &indices[triangle_index];
+            let expected_aabb = calculate_aabb(&vertices, triangle);
+            assert_eq!(aabb, expected_aabb);
+        }
+    }
+
+    #[test]
+    fn test_find_intersecting_triangles_no_overlap_bbox() {
+        let vertices = vec![
+            UVec3::new(0, 0, 0),
+            UVec3::new(1, 0, 0),
+            UVec3::new(0, 1, 0),
+            UVec3::new(1, 1, 0),
+            UVec3::new(2, 2, 0),
+            UVec3::new(3, 2, 0),
+            UVec3::new(2, 3, 0),
+        ];
+        let indices = vec![[0, 1, 2], [1, 2, 3], [4, 5, 6]];
+        let bvh = BVH::build(&vertices, &indices);
+
+        let intersecting_triangles = bvh.find_intersecting_triangles(10, 10, 2);
+        assert_eq!(intersecting_triangles.len(), 0);
+    }
+
+    #[test]
+    fn test_find_intersecting_triangles_edge_touching_bbox() {
+        let vertices = vec![
+            UVec3::new(0, 0, 0),
+            UVec3::new(1, 0, 0),
+            UVec3::new(0, 1, 0),
+            UVec3::new(1, 1, 0),
+            UVec3::new(2, 2, 0),
+            UVec3::new(3, 2, 0),
+            UVec3::new(2, 3, 0),
+        ];
+        let indices = vec![[0, 1, 2], [1, 2, 3], [4, 5, 6]];
+        let bvh = BVH::build(&vertices, &indices);
+
+        let intersecting_triangles = bvh.find_intersecting_triangles(1, 1, 1);
+        assert_eq!(intersecting_triangles.len(), 2);
+
+        for (aabb, triangle_index) in intersecting_triangles {
+            let triangle = &indices[triangle_index];
+            let expected_aabb = calculate_aabb(&vertices, triangle);
+            assert_eq!(aabb, expected_aabb);
+        }
+    }
 }
