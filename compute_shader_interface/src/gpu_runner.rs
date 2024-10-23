@@ -5,10 +5,59 @@ use spirv_std::glam::UVec3;
 // use bytemuck::{cast_slice, Pod, Zeroable};
 
 use wgpu::util::DeviceExt;
-use wgpu::Features;
+use wgpu::{Adapter, Features};
 
 // #[repr(C)]
 // #[derive(Copy, Clone, Pod,Zeroable)]
+
+
+fn print_gpu_capabilities(adapter: &Adapter) {    
+    // Print adapter properties
+    let adapter_info = adapter.get_info();
+    println!("Adapter Info:");
+    println!("  Name: {}", adapter_info.name);
+    println!("  Vendor: {}", adapter_info.vendor);
+    println!("  Device: {}", adapter_info.device);
+    println!("  Type: {:?}", adapter_info.device_type);
+    println!("  Backend: {:?}", adapter_info.backend);
+
+    // Print supported features
+    let features = adapter.features();
+    println!("Supported Features:");
+    for feature in wgpu::Features::all().iter() {
+        if features.contains(feature) {
+            println!("  {:?}", feature);
+        }
+    }
+
+    // Print supported limits
+    let limits = adapter.limits();
+    println!("Supported Limits:");
+    println!("  Max Texture Dimension 1D: {}", limits.max_texture_dimension_1d);
+    println!("  Max Texture Dimension 2D: {}", limits.max_texture_dimension_2d);
+    println!("  Max Texture Dimension 3D: {}", limits.max_texture_dimension_3d);
+    println!("  Max Texture Array Layers: {}", limits.max_texture_array_layers);
+    println!("  Max Bind Groups: {}", limits.max_bind_groups);
+    println!("  Max Dynamic Uniform Buffers Per Pipeline Layout: {}", limits.max_dynamic_uniform_buffers_per_pipeline_layout);
+    println!("  Max Dynamic Storage Buffers Per Pipeline Layout: {}", limits.max_dynamic_storage_buffers_per_pipeline_layout);
+    println!("  Max Sampled Textures Per Shader Stage: {}", limits.max_sampled_textures_per_shader_stage);
+    println!("  Max Samplers Per Shader Stage: {}", limits.max_samplers_per_shader_stage);
+    println!("  Max Storage Buffers Per Shader Stage: {}", limits.max_storage_buffers_per_shader_stage);
+    println!("  Max Storage Textures Per Shader Stage: {}", limits.max_storage_textures_per_shader_stage);
+    println!("  Max Uniform Buffers Per Shader Stage: {}", limits.max_uniform_buffers_per_shader_stage);
+    println!("  Max Uniform Buffer Binding Size: {}", limits.max_uniform_buffer_binding_size);
+    println!("  Max Storage Buffer Binding Size: {}", limits.max_storage_buffer_binding_size);
+    println!("  Max Vertex Buffers: {}", limits.max_vertex_buffers);
+    println!("  Max Vertex Attributes: {}", limits.max_vertex_attributes);
+    println!("  Max Vertex Buffer Array Stride: {}", limits.max_vertex_buffer_array_stride);
+    println!("  Max Inter-Stage Shader Components: {}", limits.max_inter_stage_shader_components);
+    println!("  Max Compute Workgroup Storage Size: {}", limits.max_compute_workgroup_storage_size);
+    println!("  Max Compute Invocations Per Workgroup: {}", limits.max_compute_invocations_per_workgroup);
+    println!("  Max Compute Workgroup Size X: {}", limits.max_compute_workgroup_size_x);
+    println!("  Max Compute Workgroup Size Y: {}", limits.max_compute_workgroup_size_y);
+    println!("  Max Compute Workgroup Size Z: {}", limits.max_compute_workgroup_size_z);
+    println!("  Max Compute Workgroups Per Dimension: {}", limits.max_compute_workgroups_per_dimension);
+}
 
 pub struct RasterParameters {
     raster_dim_size: u32,
@@ -34,6 +83,8 @@ pub async fn run_compute_shader(
         .await
         .expect("Failed to find an appropriate adapter");
 
+    print_gpu_capabilities( &adapter);
+
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
@@ -48,6 +99,8 @@ pub async fn run_compute_shader(
         .expect("Failed to create device");
     drop(instance);
     drop(adapter);
+
+
 
     // Convert UVec3 to bytes
     //let vertex_bytes: Vec<u8> = cast_slice(&vertices).to_vec();

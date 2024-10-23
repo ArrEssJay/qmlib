@@ -37,8 +37,9 @@ fn main() -> Result<(), Box<dyn Error>> {
      builder_dir = builder_dir.parent().unwrap().join("compute_shader");
     println!("{:?}", builder_dir);
 
-    let result = SpirvBuilder::new(builder_dir, "spirv-unknown-vulkan1.1")
-  //                                                                                                .capability(spirv_builder::Capability::VariablePointersStorageBuffer)
+    let result = SpirvBuilder::new(builder_dir, "spirv-unknown-spv1.3")
+    .capability(spirv_builder::Capability::AtomicFloat32AddEXT)
+    .extension("SPV_EXT_shader_atomic_float_add")
     .build()?;
 
     // if codegen_names {

@@ -1,11 +1,12 @@
 #![cfg_attr(target_arch = "spirv", no_std)]
 
 use spirv_std::{
-    glam::{ Vec2, Vec3, IVec2, UVec2, UVec3, Vec3Swizzles}, spirv,
+    glam::{ IVec2, UVec2, UVec3, Vec2, Vec3, Vec3Swizzles}, memory::Scope, memory::Semantics,spirv
 };
 
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
+use spirv_std::arch::atomic_f_add;
 
 pub struct RasterParameters {
     raster_dim_size: u32,
@@ -76,6 +77,12 @@ pub fn rasterise_triangle( params: &RasterParameters,
     let v1 = vertices[indices[index][1] as usize];
     let v2 = vertices[indices[index][2] as usize];
 
+    // for i in 0..params.raster_dim_size*params.raster_dim_size {
+    //    if index ==1 && i%2==0 { storage[i as usize] =1 as f32};
+    //    if index ==2 && i%2!=0 { storage[i as usize] =2 as f32};
+
+    // }
+
     // Determine the bounding box of the triangle
     let ( min_x,  min_y,  max_x,  max_y): (u32,u32,u32,u32);
     #[cfg(not(target_arch = "spirv"))]
@@ -110,9 +117,6 @@ pub fn rasterise_triangle( params: &RasterParameters,
     // Inverted y-axis. Note the decrementing y line counter
     let  mut raster_point: UVec2 = UVec2::new(min_x,  params.raster_dim_size - 1 - min_y);
 
-    // NaN bit pattern
-    //let f32_bits_nan = f32::to_bits(f32::NAN);
-
     for _i in min_y..=max_y
     // range is inclusive..exclusive
     {
@@ -123,8 +127,10 @@ pub fn rasterise_triangle( params: &RasterParameters,
 
             // Check if the raster cell is empty by reading the atomic value without locking
             if let Some(value) = triangle_face_height_interpolator(raster_point, [v0, v1, v2], params) {
-                
-                storage[raster_idx as usize] =value as f32;
+                //storage[raster_idx as usize] =value as f32;
+                unsafe {
+                    atomic_f_add::<f32, { Scope::Device as u32 }, { Semantics::NONE.bits() }>(&mut storage[raster_idx as usize], value);
+                }
             }
             raster_point.x += 1;
         }
@@ -184,6 +190,7 @@ pub fn point_in_triangle(v: [UVec3; 3], p: UVec2) -> bool {
 // Calculate the barycentric weights for a point p
 pub fn calculate_barycentric_weights(v: [Vec2; 3], p: Vec2) -> [f32;3] {
 
+    //area of the sub-triangles formed by the vertices and point p
    let area_abc = (v[1] - v[0]).perp_dot(v[2] - v[0]).abs();
    let area_pbc = (v[1] - p).perp_dot(v[2] - p).abs();
    let area_pca = (v[2] - p).perp_dot(v[0] - p).abs();
@@ -242,13 +249,13 @@ mod tests {
 
    #[test]
    fn test_is_cw() {
-       // Clockwise points
+       // Clockwise winding
        assert!(is_cw([IVec2::new(0, 0), IVec2::new(1, 0), IVec2::new(0, 1)]));
    
-       // Counter-clockwise points
+       // Counter-clockwise winding
        assert!(!is_cw([IVec2::new(0, 0), IVec2::new(0, 1), IVec2::new(1, 0)]));
    
-       // Collinear points (should not be considered CW)
+       // Collinear (should not be considered CW)
        assert!(!is_cw([IVec2::new(0, 0), IVec2::new(1, 1), IVec2::new(2, 2)]));
    }
    
