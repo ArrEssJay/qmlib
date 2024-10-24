@@ -88,62 +88,26 @@ impl BVH {
         triangle_indices: &mut [usize],
     ) -> BVHNode {
         if triangle_indices.is_empty() {
-            return BVHNode {
-                bounding_box: AABB {
-                    min: UVec2::new(u32::MAX, u32::MAX),
-                    max: UVec2::new(u32::MIN, u32::MIN),
-                },
-                left: None,
-                right: None,
-                triangles: vec![],
-            };
+            return Self::empty_bvh_node();
         }
-
+    
         if triangle_indices.len() == 1 {
-            return BVHNode {
-                bounding_box: triangle_bounding_boxes[triangle_indices[0]],
-                left: None,
-                right: None,
-                triangles: triangle_indices.to_vec(),
-            };
+            return Self::leaf_bvh_node(triangle_bounding_boxes, triangle_indices);
         }
-
-        // The bounding box of all intersecting triangles at this node
-        let bounding_box =  triangle_indices.iter().map(|&i| triangle_bounding_boxes[i]).fold(
-            AABB {
-                min: UVec2::new(u32::MAX, u32::MAX),
-                max: UVec2::new(u32::MIN, u32::MIN),
-            },
-            |mut aabb, tri_aabb| {
-                aabb.min = aabb.min.min(tri_aabb.min);
-                aabb.max = aabb.max.max(tri_aabb.max);
-                aabb
-            }
-        );
-
-        let axis =
-            if bounding_box.max.x - bounding_box.min.x > bounding_box.max.y - bounding_box.min.y {
-                Axis::X
-            } else {
-                Axis::Y
-            };
-
-        triangle_indices.sort_by_key(|&i| {
-            let triangle = &indices[i];
-            let centroid = (vertices[triangle[0] as usize]
-                + vertices[triangle[1] as usize]
-                + vertices[triangle[2] as usize])
-                / 3;
-            if axis == Axis::X {
-                centroid.x
-            } else {
-                centroid.y
-            }
-        });
-
+    
+        let bounding_box = Self::calculate_bounding_box(triangle_bounding_boxes, triangle_indices);
+    
+        let axis = if bounding_box.max.x - bounding_box.min.x > bounding_box.max.y - bounding_box.min.y {
+            Axis::X
+        } else {
+            Axis::Y
+        };
+    
+        Self::sort_indices_by_axis(vertices, indices, triangle_indices, axis);
+    
         let mid = triangle_indices.len() / 2;
         let (left_indices, right_indices) = triangle_indices.split_at_mut(mid);
-
+    
         BVHNode {
             bounding_box,
             left: Some(Box::new(Self::build_recursive(
@@ -161,6 +125,64 @@ impl BVH {
             triangles: vec![],
         }
     }
+    
+    fn empty_bvh_node() -> BVHNode {
+        BVHNode {
+            bounding_box: AABB {
+                min: UVec2::new(u32::MAX, u32::MAX),
+                max: UVec2::new(u32::MIN, u32::MIN),
+            },
+            left: None,
+            right: None,
+            triangles: vec![],
+        }
+    }
+    
+    fn leaf_bvh_node(triangle_bounding_boxes: &[AABB], triangle_indices: &[usize]) -> BVHNode {
+        BVHNode {
+            bounding_box: triangle_bounding_boxes[triangle_indices[0]],
+            left: None,
+            right: None,
+            triangles: triangle_indices.to_vec(),
+        }
+    }
+    
+    fn calculate_bounding_box(triangle_bounding_boxes: &[AABB], triangle_indices: &[usize]) -> AABB {
+        triangle_indices.iter().map(|&i| triangle_bounding_boxes[i]).fold(
+            AABB {
+                min: UVec2::new(u32::MAX, u32::MAX),
+                max: UVec2::new(u32::MIN, u32::MIN),
+            },
+            |mut aabb, tri_aabb| {
+                aabb.min = aabb.min.min(tri_aabb.min);
+                aabb.max = aabb.max.max(tri_aabb.max);
+                aabb
+            }
+        )
+    }
+    
+    fn sort_indices_by_axis(
+        vertices: &[UVec3],
+        indices: &[[u32; 3]],
+        triangle_indices: &mut [usize],
+        axis: Axis,
+    ) {
+        triangle_indices.sort_by_key(|&i| {
+            let triangle = &indices[i];
+            let centroid = (vertices[triangle[0] as usize]
+                + vertices[triangle[1] as usize]
+                + vertices[triangle[2] as usize])
+                / 3;
+            if axis == Axis::X {
+                centroid.x
+            } else {
+                centroid.y
+            }
+        });
+    }
+
+
+
     pub fn find_intersecting_triangles(&self, x: u32, y: u32, size: u32) -> Vec<(AABB, usize)> {
         let block_aabb = AABB {
             min: UVec2::new(x, y),
