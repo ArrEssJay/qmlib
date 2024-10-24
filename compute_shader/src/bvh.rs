@@ -77,53 +77,128 @@ impl BVH {
         let triangle_bounding_boxes: Vec<AABB> = indices.iter()
         .map(|triangle| calculate_aabb(vertices, triangle))
         .collect();
-        let root = Self::build_recursive(vertices, indices, &triangle_bounding_boxes,  &mut triangle_indices);
+        let root = Self::build_iterative(vertices, indices, &triangle_bounding_boxes,  &mut triangle_indices);
         BVH { root, triangle_bounding_boxes }
     }
 
-    fn build_recursive(
+    // Recursion is problematic in gpu-land
+    // fn build_recursive(
+    //     vertices: &[UVec3],
+    //     indices: &[[u32; 3]],
+    //     triangle_bounding_boxes: &[AABB],
+    //     triangle_indices: &mut [usize],
+    // ) -> BVHNode {
+    //     if triangle_indices.is_empty() {
+    //         return Self::empty_bvh_node();
+    //     }
+    
+    //     if triangle_indices.len() == 1 {
+    //         return Self::leaf_bvh_node(triangle_bounding_boxes, triangle_indices);
+    //     }
+    
+    //     let bounding_box = Self::calculate_bounding_box(triangle_bounding_boxes, triangle_indices);
+    
+    //     let axis = if bounding_box.max.x - bounding_box.min.x > bounding_box.max.y - bounding_box.min.y {
+    //         Axis::X
+    //     } else {
+    //         Axis::Y
+    //     };
+    
+    //     Self::sort_indices_by_axis(vertices, indices, triangle_indices, axis);
+    
+    //     let mid = triangle_indices.len() / 2;
+    //     let (left_indices, right_indices) = triangle_indices.split_at_mut(mid);
+    
+    //     BVHNode {
+    //         bounding_box,
+    //         left: Some(Box::new(Self::build_recursive(
+    //             vertices,
+    //             indices,
+    //             triangle_bounding_boxes,
+    //             left_indices,
+    //         ))),
+    //         right: Some(Box::new(Self::build_recursive(
+    //             vertices,
+    //             indices,
+    //             triangle_bounding_boxes,
+    //             right_indices,
+    //         ))),
+    //         triangles: vec![],
+    //     }
+    // }
+
+    fn build_iterative(
         vertices: &[UVec3],
         indices: &[[u32; 3]],
         triangle_bounding_boxes: &[AABB],
         triangle_indices: &mut [usize],
     ) -> BVHNode {
-        if triangle_indices.is_empty() {
-            return Self::empty_bvh_node();
-        }
-    
-        if triangle_indices.len() == 1 {
-            return Self::leaf_bvh_node(triangle_bounding_boxes, triangle_indices);
-        }
-    
-        let bounding_box = Self::calculate_bounding_box(triangle_bounding_boxes, triangle_indices);
-    
-        let axis = if bounding_box.max.x - bounding_box.min.x > bounding_box.max.y - bounding_box.min.y {
-            Axis::X
-        } else {
-            Axis::Y
+        let mut stack = vec![];
+        let mut root = BVHNode {
+            bounding_box: AABB {
+                min: UVec2::new(u32::MAX, u32::MAX),
+                max: UVec2::new(u32::MIN, u32::MIN),
+            },
+            left: None,
+            right: None,
+            triangles: vec![],
         };
     
-        Self::sort_indices_by_axis(vertices, indices, triangle_indices, axis);
+        stack.push((&mut root, triangle_indices));
     
-        let mid = triangle_indices.len() / 2;
-        let (left_indices, right_indices) = triangle_indices.split_at_mut(mid);
+        while let Some((node, triangle_indices)) = stack.pop() {
+            if triangle_indices.is_empty() {
+                *node = Self::empty_bvh_node();
+                continue;
+            }
     
-        BVHNode {
-            bounding_box,
-            left: Some(Box::new(Self::build_recursive(
-                vertices,
-                indices,
-                triangle_bounding_boxes,
-                left_indices,
-            ))),
-            right: Some(Box::new(Self::build_recursive(
-                vertices,
-                indices,
-                triangle_bounding_boxes,
-                right_indices,
-            ))),
-            triangles: vec![],
+            if triangle_indices.len() == 1 {
+                *node = Self::leaf_bvh_node(triangle_bounding_boxes, &triangle_indices);
+                continue;
+            }
+    
+            let bounding_box = Self::calculate_bounding_box(triangle_bounding_boxes, &triangle_indices);
+    
+            let axis = if bounding_box.max.x - bounding_box.min.x > bounding_box.max.y - bounding_box.min.y {
+                Axis::X
+            } else {
+                Axis::Y
+            };
+    
+            Self::sort_indices_by_axis(vertices, indices, triangle_indices, axis);
+    
+            let mid = triangle_indices.len() / 2;
+            let (left_indices, right_indices) = triangle_indices.split_at_mut(mid);
+    
+            let left_node = BVHNode {
+                bounding_box: AABB {
+                    min: UVec2::new(u32::MAX, u32::MAX),
+                    max: UVec2::new(u32::MIN, u32::MIN),
+                },
+                left: None,
+                right: None,
+                triangles: vec![],
+            };
+    
+            let right_node = BVHNode {
+                bounding_box: AABB {
+                    min: UVec2::new(u32::MAX, u32::MAX),
+                    max: UVec2::new(u32::MIN, u32::MIN),
+                },
+                left: None,
+                right: None,
+                triangles: vec![],
+            };
+    
+            node.bounding_box = bounding_box;
+            node.left = Some(Box::new(left_node));
+            node.right = Some(Box::new(right_node));
+    
+            stack.push((node.left.as_mut().unwrap().as_mut(), left_indices));
+            stack.push((node.right.as_mut().unwrap().as_mut(), right_indices));
         }
+    
+        root
     }
     
     fn empty_bvh_node() -> BVHNode {
