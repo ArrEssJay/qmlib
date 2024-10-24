@@ -72,20 +72,20 @@ pub fn build_raster_by_triangle(
     }
 }
 
-// pub fn build_raster_with_bvh(
-//     params: &RasterParameters,
-//     vertices: &[UVec3],
-//     indices: &[[u32; 3]],
-//     storage: &mut [f32],
-//     bvh: &BVH,
-// ) {
-//     let block_size = 8;
-//     for y in (0..params.raster_dim_size).step_by(block_size as usize) {
-//         for x in (0..params.raster_dim_size).step_by(block_size as usize) {
-//             process_block(params, vertices, indices, storage, bvh, x, y, block_size);
-//         }
-//     }
-// }
+pub fn build_raster_with_bvh(
+    params: &RasterParameters,
+    vertices: &[UVec3],
+    indices: &[[u32; 3]],
+    storage: &mut [f32],
+    bvh: &BVH,
+) {
+    let block_size = 8;
+    for y in (0..params.raster_dim_size).step_by(block_size as usize) {
+        for x in (0..params.raster_dim_size).step_by(block_size as usize) {
+            process_block(params, vertices, indices, storage, bvh, x, y, block_size);
+        }
+    }
+}
 
  fn process_block(
     params: &RasterParameters,
@@ -134,12 +134,6 @@ pub fn rasterise_triangle( params: &RasterParameters,
     let v1 = vertices[indices[index][1] as usize];
     let v2 = vertices[indices[index][2] as usize];
 
-    // for i in 0..params.raster_dim_size*params.raster_dim_size {
-    //    if index ==1 && i%2==0 { storage[i as usize] =1 as f32};
-    //    if index ==2 && i%2!=0 { storage[i as usize] =2 as f32};
-
-    // }
-
    let bbox = AABB::calculate_aabb(vertices,&indices[index]);
 
     // for dim_size=32768 max_x = 32767, max_y = 32767
@@ -148,30 +142,19 @@ pub fn rasterise_triangle( params: &RasterParameters,
     assert!(bbox.max.x < params.raster_dim_size);
     assert!(bbox.max.y < params.raster_dim_size);
 
-
-    // Build 2D point with the location of the top left corner of the bounding box
-    // Inverted y-axis. Note the decrementing y line counter
-    let  mut raster_point: UVec2 = UVec2::new(bbox.min.x,  params.raster_dim_size - 1 - bbox.min.y);
-
-    for _i in bbox.min.y..=bbox.max.y
-    // range is inclusive..exclusive
-    {
-        raster_point.x = bbox.min.x; // reset scanline x each row
-        for _j in bbox.min.x..=bbox.max.x {
+    // invert the y axis line order
+    for y in (bbox.min.y..=bbox.max.y).rev() {
+        for x in bbox.min.x..=bbox.max.x {
             // index in the flat raster
-            let raster_idx = ((raster_point.y * params.raster_dim_size) + raster_point.x) as usize;
-
+            let raster_idx = ((y * params.raster_dim_size) + x) as usize;
+    
             // Check if the raster cell is empty by reading the atomic value without locking
-            if let Some(value) = triangle_face_height_interpolator(raster_point, [v0, v1, v2], params) {
+            if let Some(value) = triangle_face_height_interpolator(UVec2::new(x, y), [v0, v1, v2], params) {
                 // this invites a race condition as multiple threads can write to the same cell though in
                 // theory they should be writing the same value
-                storage[raster_idx] = value
-
+                storage[raster_idx] = value;
             }
-            raster_point.x += 1;
         }
-        if raster_point.y > 0 {raster_point.y -= 1;}  //avoid underflow on min_y=0
-       
     }
 
 }
