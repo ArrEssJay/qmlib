@@ -167,25 +167,31 @@ impl BVH {
             max: UVec2::new(x + size - 1, y + size - 1),
         };
         let mut result = vec![];
-        self.traverse(&self.root, &block_aabb, &mut result);
+        self.traverse(&block_aabb, &mut result);
         result
     }
 
-    fn traverse(&self, node: &BVHNode, block_aabb: &AABB, result: &mut Vec<(AABB, usize)>) {
-        if !self.aabb_intersects(&node.bounding_box, block_aabb) {
-            return;
-        }
 
-        if node.triangles.is_empty() {
-            if let Some(ref left) = node.left {
-                self.traverse(left, block_aabb, result);
+    // Explicit stack to avoid recursion
+    fn traverse(&self, block_aabb: &AABB, result: &mut Vec<(AABB, usize)>) {
+        let mut stack = vec![&self.root];
+    
+        while let Some(node) = stack.pop() {
+            if !self.aabb_intersects(&node.bounding_box, block_aabb) {
+                continue;
             }
-            if let Some(ref right) = node.right {
-                self.traverse(right, block_aabb, result);
-            }
-        } else {
-            for &triangle_index in &node.triangles {
-                result.push((node.bounding_box, triangle_index));
+    
+            if node.triangles.is_empty() {
+                if let Some(ref left) = node.left {
+                    stack.push(left);
+                }
+                if let Some(ref right) = node.right {
+                    stack.push(right);
+                }
+            } else {
+                for &triangle_index in &node.triangles {
+                    result.push((node.bounding_box, triangle_index));
+                }
             }
         }
     }
