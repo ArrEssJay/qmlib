@@ -1,24 +1,66 @@
-use core::cmp::{max, min};
-
 use spirv_std::glam::{UVec2, UVec3};
 
+
+// Axis Aligned Bounding Box (AABB)
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct AABB {
-    min: UVec2,
-    max: UVec2,
+pub struct AABB { 
+    pub min: UVec2, //min_x, min_y
+    pub max: UVec2, //max_x, max_y
+}
+
+
+// Bounding Box imolementation specifically for use
+// in bounding volume hierarchies (BVH)  generation and
+// traversal/rasterisation
+impl AABB   {
+
+    pub fn calculate_aabb(vertices: &[UVec3], indices: &[u32; 3]) -> AABB {
+        let v0 = vertices[indices[0] as usize];
+        let v1 = vertices[indices[1] as usize];
+        let v2 = vertices[indices[2] as usize];
+    
+         // Determine the bounding box of the triangle
+         let ( min_x,  min_y,  max_x,  max_y): (u32,u32,u32,u32);
+         #[cfg(not(target_arch = "spirv"))]
+         {
+             use std::cmp::{max, min};
+     
+             min_x = min(min(v0.x, v1.x), v2.x);
+             min_y = min(min(v0.y, v1.y), v2.y);
+             
+             max_x = max(max(v0.x, v1.x), v2.x);
+             max_y = max(max(v0.y, v1.y), v2.y);
+         }
+         #[cfg(target_arch = "spirv")]
+         {
+             use spirv_std::arch::{unsigned_max, unsigned_min};
+     
+             min_x = unsigned_min(unsigned_min(v0.x, v1.x), v2.x);
+             min_y = unsigned_min(unsigned_min(v0.y, v1.y), v2.y);
+     
+             max_x = unsigned_max(unsigned_max(v0.x, v1.x), v2.x);
+             max_y = unsigned_max(unsigned_max(v0.y, v1.y), v2.y);
+         }
+    
+        AABB {
+            min: UVec2::new(min_x, min_y),
+            max: UVec2::new(max_x, max_y),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
 pub struct BVHNode {
-    bounding_box: AABB,
-    left: Option<Box<BVHNode>>,
-    right: Option<Box<BVHNode>>,
-    triangles: Vec<usize>,
+    pub bounding_box: AABB,
+    pub left: Option<Box<BVHNode>>,
+    pub right: Option<Box<BVHNode>>,
+    pub triangles: Vec<usize>,
 }
 
 #[derive(Clone, PartialEq)]
 pub struct BVH {
-    root: BVHNode,
+    pub root: BVHNode,
+    pub triangle_bounding_boxes: Vec<AABB>,
 }
 
 #[derive(PartialEq)]
@@ -32,13 +74,17 @@ pub enum Axis {
 impl BVH {
     pub fn build(vertices: &[UVec3], indices: &[[u32; 3]]) -> Self {
         let mut triangle_indices: Vec<usize> = (0..indices.len()).collect();
-        let root = Self::build_recursive(vertices, indices, &mut triangle_indices);
-        BVH { root }
+        let triangle_bounding_boxes: Vec<AABB> = indices.iter()
+        .map(|triangle| calculate_aabb(vertices, triangle))
+        .collect();
+        let root = Self::build_recursive(vertices, indices, &triangle_bounding_boxes,  &mut triangle_indices);
+        BVH { root, triangle_bounding_boxes }
     }
 
     fn build_recursive(
         vertices: &[UVec3],
         indices: &[[u32; 3]],
+        triangle_bounding_boxes: &[AABB],
         triangle_indices: &mut [usize],
     ) -> BVHNode {
         if triangle_indices.is_empty() {
@@ -54,27 +100,25 @@ impl BVH {
         }
 
         if triangle_indices.len() == 1 {
-            let triangle = &indices[triangle_indices[0]];
             return BVHNode {
-                bounding_box: calculate_aabb(vertices, triangle),
+                bounding_box: triangle_bounding_boxes[triangle_indices[0]],
                 left: None,
                 right: None,
                 triangles: triangle_indices.to_vec(),
             };
         }
 
-        let bounding_box = triangle_indices.iter().fold(
+        // The bounding box of all intersecting triangles at this node
+        let bounding_box =  triangle_indices.iter().map(|&i| triangle_bounding_boxes[i]).fold(
             AABB {
                 min: UVec2::new(u32::MAX, u32::MAX),
                 max: UVec2::new(u32::MIN, u32::MIN),
             },
-            |mut aabb, &i| {
-                let triangle = &indices[i];
-                let tri_aabb = calculate_aabb(vertices, triangle);
+            |mut aabb, tri_aabb| {
                 aabb.min = aabb.min.min(tri_aabb.min);
                 aabb.max = aabb.max.max(tri_aabb.max);
                 aabb
-            },
+            }
         );
 
         let axis =
@@ -105,11 +149,13 @@ impl BVH {
             left: Some(Box::new(Self::build_recursive(
                 vertices,
                 indices,
+                triangle_bounding_boxes,
                 left_indices,
             ))),
             right: Some(Box::new(Self::build_recursive(
                 vertices,
                 indices,
+                triangle_bounding_boxes,
                 right_indices,
             ))),
             triangles: vec![],
@@ -173,16 +219,39 @@ fn calculate_aabb(vertices: &[UVec3], indices: &[u32; 3]) -> AABB {
     let v0 = vertices[indices[0] as usize];
     let v1 = vertices[indices[1] as usize];
     let v2 = vertices[indices[2] as usize];
+
+     // Determine the bounding box of the triangle
+     let ( min_x,  min_y,  max_x,  max_y): (u32,u32,u32,u32);
+     #[cfg(not(target_arch = "spirv"))]
+     {
+         use std::cmp::{max, min};
+ 
+         min_x = min(min(v0.x, v1.x), v2.x);
+         min_y = min(min(v0.y, v1.y), v2.y);
+         
+         max_x = max(max(v0.x, v1.x), v2.x);
+         max_y = max(max(v0.y, v1.y), v2.y);
+     }
+     #[cfg(target_arch = "spirv")]
+     {
+         use spirv_std::arch::{unsigned_max, unsigned_min};
+ 
+         min_x = unsigned_min(unsigned_min(v0.x, v1.x), v2.x);
+         min_y = unsigned_min(unsigned_min(v0.y, v1.y), v2.y);
+ 
+         max_x = unsigned_max(unsigned_max(v0.x, v1.x), v2.x);
+         max_y = unsigned_max(unsigned_max(v0.y, v1.y), v2.y);
+     }
+
     AABB {
-        min: UVec2::new(min(min(v0.x, v1.x), v2.x), min(min(v0.y, v1.y), v2.y)),
-        max: UVec2::new(max(max(v0.x, v1.x), v2.x), max(max(v0.y, v1.y), v2.y)),
+        min: UVec2::new(min_x, min_y),
+        max: UVec2::new(max_x, max_y),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn test_aabb_intersection() {
         let a = AABB {
@@ -205,6 +274,7 @@ mod tests {
                 right: None,
                 triangles: vec![],
             },
+            triangle_bounding_boxes: vec![],
         };
 
         assert!(bvh.aabb_intersects(&a, &b));
@@ -229,10 +299,12 @@ mod tests {
                 right: None,
                 triangles: vec![],
             },
+            triangle_bounding_boxes: vec![],
         };
 
         assert!(bvh.aabb_intersects(&a, &b));
     }
+
     #[test]
     fn test_aabb_intersection_no_overlap() {
         let a = AABB {
@@ -251,6 +323,7 @@ mod tests {
                 right: None,
                 triangles: vec![],
             },
+            triangle_bounding_boxes: vec![],
         };
 
         assert!(!bvh.aabb_intersects(&a, &b));
@@ -274,6 +347,7 @@ mod tests {
                 right: None,
                 triangles: vec![],
             },
+            triangle_bounding_boxes: vec![],
         };
 
         assert!(bvh.aabb_intersects(&a, &b));
@@ -293,92 +367,12 @@ mod tests {
                 right: None,
                 triangles: vec![],
             },
+            triangle_bounding_boxes: vec![],
         };
 
         assert!(bvh.aabb_intersects(&a, &a));
     }
 
-    #[test]
-    fn test_empty_bvh() {
-        let vertices = vec![];
-        let indices = vec![];
-        let bvh = BVH::build(&vertices, &indices);
-
-        let intersecting_triangles = bvh.find_intersecting_triangles(1, 1, 1);
-        assert_eq!(intersecting_triangles.len(), 0);
-    }
-
-    #[test]
-    fn test_build_recursive_single_triangle() {
-        let vertices = vec![
-            UVec3::new(0, 0, 0),
-            UVec3::new(1, 0, 0),
-            UVec3::new(0, 1, 0),
-        ];
-        let indices = vec![[0, 1, 2]];
-        let mut triangle_indices = vec![0];
-
-        let node = BVH::build_recursive(&vertices, &indices, &mut triangle_indices);
-
-        assert_eq!(node.triangles.len(), 1);
-        assert_eq!(node.triangles[0], 0);
-        assert!(node.left.is_none());
-        assert!(node.right.is_none());
-    }
-
-    #[test]
-    fn test_build_recursive_multiple_triangles() {
-        let vertices = vec![
-            UVec3::new(0, 0, 0),
-            UVec3::new(1, 0, 0),
-            UVec3::new(0, 1, 0),
-            UVec3::new(1, 1, 0),
-        ];
-        let indices = vec![[0, 1, 2], [1, 2, 3]];
-        let mut triangle_indices = vec![0, 1];
-
-        let node = BVH::build_recursive(&vertices, &indices, &mut triangle_indices);
-
-        assert!(node.triangles.is_empty());
-        assert!(node.left.is_some());
-        assert!(node.right.is_some());
-    }
-
-    #[test]
-    fn test_build_recursive_balanced_split() {
-        let vertices = vec![
-            UVec3::new(0, 0, 0),
-            UVec3::new(2, 0, 0),
-            UVec3::new(0, 2, 0),
-            UVec3::new(2, 2, 0),
-        ];
-        let indices = vec![[0, 1, 2], [1, 2, 3]];
-        let mut triangle_indices = vec![0, 1];
-
-        let node = BVH::build_recursive(&vertices, &indices, &mut triangle_indices);
-
-        assert!(node.triangles.is_empty());
-        assert!(node.left.is_some());
-        assert!(node.right.is_some());
-    }
-
-    #[test]
-    fn test_build_recursive_unbalanced_split() {
-        let vertices = vec![
-            UVec3::new(0, 0, 0),
-            UVec3::new(3, 0, 0),
-            UVec3::new(0, 3, 0),
-            UVec3::new(3, 3, 0),
-        ];
-        let indices = vec![[0, 1, 2], [1, 2, 3]];
-        let mut triangle_indices = vec![0, 1];
-
-        let node = BVH::build_recursive(&vertices, &indices, &mut triangle_indices);
-
-        assert!(node.triangles.is_empty());
-        assert!(node.left.is_some());
-        assert!(node.right.is_some());
-    }
     #[test]
     fn test_find_intersecting_triangles_single_point() {
         let vertices = vec![

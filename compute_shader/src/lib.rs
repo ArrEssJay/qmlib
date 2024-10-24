@@ -1,12 +1,12 @@
 #![cfg_attr(target_arch = "spirv", no_std)]
 
+use bvh::{AABB, BVH};
 use spirv_std::{
     glam::{ IVec2, UVec2, UVec3, Vec2, Vec3, Vec3Swizzles}, memory::Scope, memory::Semantics,spirv
 };
 
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
-use spirv_std::arch::atomic_f_add;
 
 
 mod bvh;
@@ -61,7 +61,7 @@ pub fn rasterise_hello(
 }
 
 // Run the rasterisation algorithm on the CPU
-pub fn build_raster(
+pub fn build_raster_by_triangle(
     params: &RasterParameters,
     vertices: &[UVec3],
     indices: &[[u32; 3]],
@@ -71,6 +71,59 @@ pub fn build_raster(
     rasterise_triangle(params, vertices,indices,storage, index)
     }
 }
+
+// pub fn build_raster_with_bvh(
+//     params: &RasterParameters,
+//     vertices: &[UVec3],
+//     indices: &[[u32; 3]],
+//     storage: &mut [f32],
+//     bvh: &BVH,
+// ) {
+//     let block_size = 8;
+//     for y in (0..params.raster_dim_size).step_by(block_size as usize) {
+//         for x in (0..params.raster_dim_size).step_by(block_size as usize) {
+//             process_block(params, vertices, indices, storage, bvh, x, y, block_size);
+//         }
+//     }
+// }
+
+ fn process_block(
+    params: &RasterParameters,
+    vertices: &[UVec3],
+    indices: &[[u32; 3]],
+    storage: &mut [f32],
+    bvh: &BVH,
+    block_x: u32,
+    block_y: u32,
+    block_size: u32,
+) {
+    let intersecting_triangles = bvh.find_intersecting_triangles(block_x, block_y, block_size);
+
+    for y in block_y..block_y + block_size {
+        for x in block_x..block_x + block_size {
+            let pixel = UVec2::new(x, y);
+            for &(aabb, triangle_index) in &intersecting_triangles {
+                // Perform a quick bounding box check first
+                if pixel.x >= aabb.min.x && pixel.x <= aabb.max.x && pixel.y >= aabb.min.y && pixel.y <= aabb.max.y {
+                    let triangle = [
+                        vertices[indices[triangle_index][0] as usize],
+                        vertices[indices[triangle_index][1] as usize],
+                        vertices[indices[triangle_index][2] as usize],
+                    ];
+                    if point_in_triangle(triangle, pixel) {
+                        if let Some(value) = triangle_face_height_interpolator(pixel, triangle, params) {
+                            let raster_idx = (y * params.raster_dim_size + x) as usize;
+                            // Only this block will write to these elements of the storage buffer so no need
+                            // to care about atomicity
+                            storage[raster_idx] = value
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 pub fn rasterise_triangle( params: &RasterParameters,
     vertices: &[UVec3],
@@ -87,54 +140,33 @@ pub fn rasterise_triangle( params: &RasterParameters,
 
     // }
 
-    // Determine the bounding box of the triangle
-    let ( min_x,  min_y,  max_x,  max_y): (u32,u32,u32,u32);
-    #[cfg(not(target_arch = "spirv"))]
-    {
-        use std::cmp::{max, min};
-
-        min_x = min(min(v0.x, v1.x), v2.x);
-        min_y = min(min(v0.y, v1.y), v2.y);
-        
-        max_x = max(max(v0.x, v1.x), v2.x);
-        max_y = max(max(v0.y, v1.y), v2.y);
-    }
-    #[cfg(target_arch = "spirv")]
-    {
-        use spirv_std::arch::{unsigned_max, unsigned_min};
-
-        min_x = unsigned_min(unsigned_min(v0.x, v1.x), v2.x);
-        min_y = unsigned_min(unsigned_min(v0.y, v1.y), v2.y);
-
-        max_x = unsigned_max(unsigned_max(v0.x, v1.x), v2.x);
-        max_y = unsigned_max(unsigned_max(v0.y, v1.y), v2.y);
-    }
+   let bbox = AABB::calculate_aabb(vertices,&indices[index]);
 
     // for dim_size=32768 max_x = 32767, max_y = 32767
-    assert!(max_x > 0);
-    assert!(max_y > 0);
-    assert!(max_x < params.raster_dim_size);
-    assert!(max_y < params.raster_dim_size);
+    assert!(bbox.max.x > 0);
+    assert!(bbox.max.y > 0);
+    assert!(bbox.max.x < params.raster_dim_size);
+    assert!(bbox.max.y < params.raster_dim_size);
 
 
     // Build 2D point with the location of the top left corner of the bounding box
     // Inverted y-axis. Note the decrementing y line counter
-    let  mut raster_point: UVec2 = UVec2::new(min_x,  params.raster_dim_size - 1 - min_y);
+    let  mut raster_point: UVec2 = UVec2::new(bbox.min.x,  params.raster_dim_size - 1 - bbox.min.y);
 
-    for _i in min_y..=max_y
+    for _i in bbox.min.y..=bbox.max.y
     // range is inclusive..exclusive
     {
-        raster_point.x = min_x; // reset scanline x each row
-        for _j in min_x..=max_x {
+        raster_point.x = bbox.min.x; // reset scanline x each row
+        for _j in bbox.min.x..=bbox.max.x {
             // index in the flat raster
             let raster_idx = ((raster_point.y * params.raster_dim_size) + raster_point.x) as usize;
 
             // Check if the raster cell is empty by reading the atomic value without locking
             if let Some(value) = triangle_face_height_interpolator(raster_point, [v0, v1, v2], params) {
-                //storage[raster_idx as usize] =value as f32;
-                unsafe {
-                    atomic_f_add::<f32, { Scope::Device as u32 }, { Semantics::NONE.bits() }>(&mut storage[raster_idx as usize], value);
-                }
+                // this invites a race condition as multiple threads can write to the same cell though in
+                // theory they should be writing the same value
+                storage[raster_idx] = value
+
             }
             raster_point.x += 1;
         }
@@ -560,6 +592,7 @@ mod tests {
 
    #[test]
    // The vertex positions are expected to be pre-scaled so as to be in the range of the raster size
+   // epsilon 1e-5 will fail if using f32 rather than f64
    fn test_raster_plane() {
        let params = RasterParameters {
            raster_dim_size: 4,
@@ -581,7 +614,7 @@ mod tests {
 
        let mut storage = vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
 
-       build_raster(&params, &vertices, &indices, &mut storage);
+       build_raster_by_triangle(&params, &vertices, &indices, &mut storage);
       
        let expected_output = vec![
        0.0, 33.333336, 66.66667, 100.0,
