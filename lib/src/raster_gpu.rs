@@ -3,7 +3,7 @@ use glam::{UVec3};
 use crate::quantized_mesh_tile;
 
 use quantized_mesh_tile::QuantizedMeshTile;
-use compute_shader_interface::run_compute_shader;
+use compute_shader_interface::{run_compute_shader, RasterParameters};
 
 
 
@@ -30,14 +30,21 @@ pub fn rasterise(
     })
     .collect();
 
+    let params = RasterParameters {
+        raster_dim_size: 64,
+        height_min: qmt.quantized_mesh.header.min_height,
+        height_max:  qmt.quantized_mesh.header.max_height,
+    };
+
     async_std::task::block_on(async {
         let result = run_compute_shader(
-            raster_dim_size,
             &vertices,
             &indices,
-            &[qmt.quantized_mesh.header.min_height, qmt.quantized_mesh.header.max_height],
+            &params
         ).await;
         println!("Result length: {}", result.len());
     });
+
+
     
 }

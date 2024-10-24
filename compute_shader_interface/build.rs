@@ -38,8 +38,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}", builder_dir);
 
     let result = SpirvBuilder::new(builder_dir, "spirv-unknown-spv1.3")
-    .capability(spirv_builder::Capability::AtomicFloat32AddEXT)
-    .extension("SPV_EXT_shader_atomic_float_add")
+    //.capability(spirv_builder::Capability::AtomicFloat32AddEXT)
+    //.extension("SPV_EXT_shader_atomic_float_add")
     .build()?;
 
     // if codegen_names {

@@ -2,13 +2,54 @@ use std::fs::File;
 use std::io::Read;
 
 use spirv_std::glam::UVec3;
-// use bytemuck::{cast_slice, Pod, Zeroable};
 
 use wgpu::util::DeviceExt;
 use wgpu::{Adapter, Features};
+use glam::UVec4;
 
-// #[repr(C)]
-// #[derive(Copy, Clone, Pod,Zeroable)]
+pub const GRID_CELL_SIZE: u32 = 8;
+
+#[repr(C)]
+#[derive(Debug,Copy, Clone)]
+pub struct RasterParameters {
+    pub raster_dim_size: u32,
+    pub height_min: f32,
+    pub height_max: f32,
+}
+
+// Only needed on host
+// This doesn't really belong here but it avoids having to deal with
+// importing from the shader crate
+#[cfg(not(target_arch = "spirv"))]
+pub fn assign_grid_cell_bounding_boxes(
+    vertices: &[UVec3],
+    indices: &[[u32; 3]], // vertex indices
+) -> Vec<UVec4> {
+ 
+    let mut bounding_boxes: Vec<UVec4> = Vec::new();
+
+    for triangle_indices in indices.iter() {
+        let aabb:UVec4 = calculate_triangle_aabb(vertices, triangle_indices);
+        bounding_boxes.push(aabb);
+    }
+
+    bounding_boxes
+}
+pub fn calculate_triangle_aabb(vertices: &[UVec3], indices: &[u32; 3]) -> UVec4 {
+    let v0 = vertices[indices[0] as usize];
+    let v1 = vertices[indices[1] as usize];
+    let v2 = vertices[indices[2] as usize];
+
+    use core::cmp::{max, min};
+
+    let min_x = min(min(v0.x, v1.x), v2.x);
+    let min_y = min(min(v0.y, v1.y), v2.y);
+    let max_x = max(max(v0.x, v1.x), v2.x);
+    let max_y = max(max(v0.y, v1.y), v2.y);
+
+    UVec4::new(min_x, min_y, max_x, max_y)
+}
+
 
 fn print_gpu_capabilities(adapter: &Adapter) {
     // Print adapter properties
@@ -121,19 +162,13 @@ fn print_gpu_capabilities(adapter: &Adapter) {
     );
 }
 
-pub struct RasterParameters {
-    raster_dim_size: u32,
-    height_min: f32,
-    height_max: f32,
-}
+
 
 pub async fn run_compute_shader(
     vertices: &[UVec3],
     indices: &[[u32; 3]],
     params: &RasterParameters,
 ) -> Vec<f32> {
-    let output_raster_size_bytes = (params.raster_dim_size as u64 * params.raster_dim_size as u64)
-        * std::mem::size_of::<f32>() as u64;
     // device
     let backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -162,6 +197,11 @@ pub async fn run_compute_shader(
     drop(instance);
     drop(adapter);
 
+    // Data to be processed
+    let output_raster_size_bytes = (params.raster_dim_size as u64 * params.raster_dim_size as u64)
+        * std::mem::size_of::<f32>() as u64;
+
+        
     // Convert UVec3 to bytes
     //let vertex_bytes: Vec<u8> = cast_slice(&vertices).to_vec();
     let vertex_bytes: Vec<u8> = vertices
@@ -174,19 +214,45 @@ pub async fn run_compute_shader(
         })
         .collect();
 
-    // Convert UVec3 to bytes
-    // let index_bytes: Vec<u8> = cast_slice(&indices).to_vec();
-    let index_bytes: Vec<u8> = indices
+        let index_bytes: Vec<u8> = indices
         .iter()
-        .flat_map(|&triangle| {
-            triangle
+        .flat_map(|v| {
+                v.iter()
+                .flat_map(|&x| x.to_ne_bytes())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+        
+    // Convert each field to bytes
+    let raster_dim_size_bytes = params.raster_dim_size.to_ne_bytes();
+    let height_min_bytes = params.height_min.to_ne_bytes();
+    let height_max_bytes = params.height_max.to_ne_bytes();
+
+    // Concatenate the byte arrays
+    let mut params_bytes = Vec::new();
+    params_bytes.extend_from_slice(&raster_dim_size_bytes);
+    params_bytes.extend_from_slice(&height_min_bytes);
+    params_bytes.extend_from_slice(&height_max_bytes);
+
+    let bounding_boxes = assign_grid_cell_bounding_boxes(vertices, indices);
+    let bounding_boxes_bytes: Vec<u8> = bounding_boxes
+        .iter()
+        .flat_map(|v| {
+            v.to_array()
                 .iter()
                 .flat_map(|&x| x.to_ne_bytes())
                 .collect::<Vec<_>>()
         })
         .collect();
 
-    //buffers - map to byte arrays
+    let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Raster Parameters"),
+        contents: params_bytes.as_slice(),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),
         contents: vertex_bytes.as_slice(),
@@ -206,6 +272,7 @@ pub async fn run_compute_shader(
         mapped_at_creation: false,
     });
 
+    // Not bound to any bind group
     let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Readback Buffer"),
         size: output_raster_size_bytes,
@@ -213,30 +280,14 @@ pub async fn run_compute_shader(
         mapped_at_creation: false,
     });
 
-    // Convert each field to bytes
-    let raster_dim_size_bytes = params.raster_dim_size.to_ne_bytes();
-    let height_min_bytes = params.height_min.to_ne_bytes();
-    let height_max_bytes = params.height_max.to_ne_bytes();
-
-    // Concatenate the byte arrays
-    let mut uniform_bytes = Vec::new();
-    uniform_bytes.extend_from_slice(&raster_dim_size_bytes);
-    uniform_bytes.extend_from_slice(&height_min_bytes);
-    uniform_bytes.extend_from_slice(&height_max_bytes);
-
-    let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Raster Parameters"),
-        contents: &uniform_bytes,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    let bounding_boxes_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Bounding Boxes Buffer"),
+        contents: bounding_boxes_bytes.as_slice(),
+        usage: wgpu::BufferUsages::STORAGE,
     });
 
     // Read the shader file at runtime
-
     let entry_point = "main_cs";
-    //let compiled_shader_modules = maybe_watch();
-    //let module = compiled_shader_modules.spv_module_for_entry_point(entry_point);
-
-    // Read the SPIR-V file
     let path = "/Users/rowan/Projects-Code/qmlib/target/spirv-builder/spirv-unknown-vulkan1.1/release/deps/qmlib_compute_shader.spv";
 
     let mut file = File::open(path).expect("Failed to open SPIR-V file");
@@ -248,7 +299,6 @@ pub async fn run_compute_shader(
     let spirv: Vec<u32> = bytemuck::cast_slice(&bytes).to_vec();
 
     let label = "Shader Module";
-    //let wgpu::ShaderModuleDescriptorSpirV { label, source } = module;
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
         source: wgpu::ShaderSource::SpirV(spirv.into()),
@@ -258,6 +308,7 @@ pub async fn run_compute_shader(
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
         entries: &[
+            //params
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -268,6 +319,8 @@ pub async fn run_compute_shader(
                 },
                 count: None,
             },
+
+            //vertices
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -278,6 +331,8 @@ pub async fn run_compute_shader(
                 },
                 count: None,
             },
+
+            //indices
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -288,8 +343,22 @@ pub async fn run_compute_shader(
                 },
                 count: None,
             },
+
+            //bounding_boxes
             wgpu::BindGroupLayoutEntry {
                 binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                    ty: wgpu::BufferBindingType::Storage { read_only: true }, // Set read_only to true
+                },
+                count: None,
+            },
+
+            //storage
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     has_dynamic_offset: false,
@@ -306,7 +375,7 @@ pub async fn run_compute_shader(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: params_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -318,6 +387,10 @@ pub async fn run_compute_shader(
             },
             wgpu::BindGroupEntry {
                 binding: 3,
+                resource: bounding_boxes_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
                 resource: storage_buffer.as_entire_binding(),
             },
         ],
@@ -344,13 +417,11 @@ pub async fn run_compute_shader(
         label: Some("Command Encoder"),
     });
 
-    // Calculate the number of workgroups needed
-    let num_triangles = indices.len() as u32;
-    let workgroup_size = 8 * 8; // 64 threads per workgroup
-    let num_workgroups = (num_triangles + workgroup_size - 1) / workgroup_size;
+    // Calculate the number of workgroups needed - symmetric about x and y
+    let num_workgroups_x_y = params.raster_dim_size / GRID_CELL_SIZE;
+
     println!(
-        "num_triangles: {}, workgroup_size: {}, num_workgroups:{}",
-        num_triangles, workgroup_size, num_workgroups
+        "num_workgroups_x_y: {}", num_workgroups_x_y,
     );
 
     // Set up the compute pass
@@ -360,7 +431,7 @@ pub async fn run_compute_shader(
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
 
-        compute_pass.dispatch_workgroups(num_workgroups, 1, 1);
+        compute_pass.dispatch_workgroups(num_workgroups_x_y, num_workgroups_x_y, 1);
     }
     // Copy data from the storage buffer to the readback buffer
     encoder.copy_buffer_to_buffer(
@@ -417,7 +488,6 @@ mod tests {
 
         let result = run_compute_shader(&vertices, &indices, &params).await;
 
-        // Add assertions to verify the result
         assert_eq!(
             result.len(),
             (params.raster_dim_size * params.raster_dim_size) as usize
