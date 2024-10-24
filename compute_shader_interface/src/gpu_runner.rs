@@ -10,8 +10,7 @@ use wgpu::{Adapter, Features};
 // #[repr(C)]
 // #[derive(Copy, Clone, Pod,Zeroable)]
 
-
-fn print_gpu_capabilities(adapter: &Adapter) {    
+fn print_gpu_capabilities(adapter: &Adapter) {
     // Print adapter properties
     let adapter_info = adapter.get_info();
     println!("Adapter Info:");
@@ -33,30 +32,93 @@ fn print_gpu_capabilities(adapter: &Adapter) {
     // Print supported limits
     let limits = adapter.limits();
     println!("Supported Limits:");
-    println!("  Max Texture Dimension 1D: {}", limits.max_texture_dimension_1d);
-    println!("  Max Texture Dimension 2D: {}", limits.max_texture_dimension_2d);
-    println!("  Max Texture Dimension 3D: {}", limits.max_texture_dimension_3d);
-    println!("  Max Texture Array Layers: {}", limits.max_texture_array_layers);
+    println!(
+        "  Max Texture Dimension 1D: {}",
+        limits.max_texture_dimension_1d
+    );
+    println!(
+        "  Max Texture Dimension 2D: {}",
+        limits.max_texture_dimension_2d
+    );
+    println!(
+        "  Max Texture Dimension 3D: {}",
+        limits.max_texture_dimension_3d
+    );
+    println!(
+        "  Max Texture Array Layers: {}",
+        limits.max_texture_array_layers
+    );
     println!("  Max Bind Groups: {}", limits.max_bind_groups);
-    println!("  Max Dynamic Uniform Buffers Per Pipeline Layout: {}", limits.max_dynamic_uniform_buffers_per_pipeline_layout);
-    println!("  Max Dynamic Storage Buffers Per Pipeline Layout: {}", limits.max_dynamic_storage_buffers_per_pipeline_layout);
-    println!("  Max Sampled Textures Per Shader Stage: {}", limits.max_sampled_textures_per_shader_stage);
-    println!("  Max Samplers Per Shader Stage: {}", limits.max_samplers_per_shader_stage);
-    println!("  Max Storage Buffers Per Shader Stage: {}", limits.max_storage_buffers_per_shader_stage);
-    println!("  Max Storage Textures Per Shader Stage: {}", limits.max_storage_textures_per_shader_stage);
-    println!("  Max Uniform Buffers Per Shader Stage: {}", limits.max_uniform_buffers_per_shader_stage);
-    println!("  Max Uniform Buffer Binding Size: {}", limits.max_uniform_buffer_binding_size);
-    println!("  Max Storage Buffer Binding Size: {}", limits.max_storage_buffer_binding_size);
+    println!(
+        "  Max Dynamic Uniform Buffers Per Pipeline Layout: {}",
+        limits.max_dynamic_uniform_buffers_per_pipeline_layout
+    );
+    println!(
+        "  Max Dynamic Storage Buffers Per Pipeline Layout: {}",
+        limits.max_dynamic_storage_buffers_per_pipeline_layout
+    );
+    println!(
+        "  Max Sampled Textures Per Shader Stage: {}",
+        limits.max_sampled_textures_per_shader_stage
+    );
+    println!(
+        "  Max Samplers Per Shader Stage: {}",
+        limits.max_samplers_per_shader_stage
+    );
+    println!(
+        "  Max Storage Buffers Per Shader Stage: {}",
+        limits.max_storage_buffers_per_shader_stage
+    );
+    println!(
+        "  Max Storage Textures Per Shader Stage: {}",
+        limits.max_storage_textures_per_shader_stage
+    );
+    println!(
+        "  Max Uniform Buffers Per Shader Stage: {}",
+        limits.max_uniform_buffers_per_shader_stage
+    );
+    println!(
+        "  Max Uniform Buffer Binding Size: {}",
+        limits.max_uniform_buffer_binding_size
+    );
+    println!(
+        "  Max Storage Buffer Binding Size: {}",
+        limits.max_storage_buffer_binding_size
+    );
     println!("  Max Vertex Buffers: {}", limits.max_vertex_buffers);
     println!("  Max Vertex Attributes: {}", limits.max_vertex_attributes);
-    println!("  Max Vertex Buffer Array Stride: {}", limits.max_vertex_buffer_array_stride);
-    println!("  Max Inter-Stage Shader Components: {}", limits.max_inter_stage_shader_components);
-    println!("  Max Compute Workgroup Storage Size: {}", limits.max_compute_workgroup_storage_size);
-    println!("  Max Compute Invocations Per Workgroup: {}", limits.max_compute_invocations_per_workgroup);
-    println!("  Max Compute Workgroup Size X: {}", limits.max_compute_workgroup_size_x);
-    println!("  Max Compute Workgroup Size Y: {}", limits.max_compute_workgroup_size_y);
-    println!("  Max Compute Workgroup Size Z: {}", limits.max_compute_workgroup_size_z);
-    println!("  Max Compute Workgroups Per Dimension: {}", limits.max_compute_workgroups_per_dimension);
+    println!(
+        "  Max Vertex Buffer Array Stride: {}",
+        limits.max_vertex_buffer_array_stride
+    );
+    println!(
+        "  Max Inter-Stage Shader Components: {}",
+        limits.max_inter_stage_shader_components
+    );
+    println!(
+        "  Max Compute Workgroup Storage Size: {}",
+        limits.max_compute_workgroup_storage_size
+    );
+    println!(
+        "  Max Compute Invocations Per Workgroup: {}",
+        limits.max_compute_invocations_per_workgroup
+    );
+    println!(
+        "  Max Compute Workgroup Size X: {}",
+        limits.max_compute_workgroup_size_x
+    );
+    println!(
+        "  Max Compute Workgroup Size Y: {}",
+        limits.max_compute_workgroup_size_y
+    );
+    println!(
+        "  Max Compute Workgroup Size Z: {}",
+        limits.max_compute_workgroup_size_z
+    );
+    println!(
+        "  Max Compute Workgroups Per Dimension: {}",
+        limits.max_compute_workgroups_per_dimension
+    );
 }
 
 pub struct RasterParameters {
@@ -67,11 +129,11 @@ pub struct RasterParameters {
 
 pub async fn run_compute_shader(
     vertices: &[UVec3],
-    indices: &[[u32;3]],
+    indices: &[[u32; 3]],
     params: &RasterParameters,
 ) -> Vec<f32> {
-    let output_raster_size_bytes =
-        (params.raster_dim_size as u64 * params.raster_dim_size as u64) * std::mem::size_of::<f32>() as u64;
+    let output_raster_size_bytes = (params.raster_dim_size as u64 * params.raster_dim_size as u64)
+        * std::mem::size_of::<f32>() as u64;
     // device
     let backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -83,7 +145,7 @@ pub async fn run_compute_shader(
         .await
         .expect("Failed to find an appropriate adapter");
 
-    print_gpu_capabilities( &adapter);
+    print_gpu_capabilities(&adapter);
 
     let (device, queue) = adapter
         .request_device(
@@ -100,23 +162,29 @@ pub async fn run_compute_shader(
     drop(instance);
     drop(adapter);
 
-
-
     // Convert UVec3 to bytes
     //let vertex_bytes: Vec<u8> = cast_slice(&vertices).to_vec();
-    let vertex_bytes: Vec<u8> = vertices.iter()
-    .flat_map(|v| {
-        v.to_array().iter().flat_map(|&x| x.to_ne_bytes()).collect::<Vec<_>>()
-    })
-    .collect();
+    let vertex_bytes: Vec<u8> = vertices
+        .iter()
+        .flat_map(|v| {
+            v.to_array()
+                .iter()
+                .flat_map(|&x| x.to_ne_bytes())
+                .collect::<Vec<_>>()
+        })
+        .collect();
 
     // Convert UVec3 to bytes
-   // let index_bytes: Vec<u8> = cast_slice(&indices).to_vec();
-   let index_bytes: Vec<u8> = indices.iter()
-   .flat_map(|&triangle| {
-       triangle.iter().flat_map(|&x| x.to_ne_bytes()).collect::<Vec<_>>()
-   })
-   .collect();
+    // let index_bytes: Vec<u8> = cast_slice(&indices).to_vec();
+    let index_bytes: Vec<u8> = indices
+        .iter()
+        .flat_map(|&triangle| {
+            triangle
+                .iter()
+                .flat_map(|&x| x.to_ne_bytes())
+                .collect::<Vec<_>>()
+        })
+        .collect();
 
     //buffers - map to byte arrays
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -145,7 +213,6 @@ pub async fn run_compute_shader(
         mapped_at_creation: false,
     });
 
-    
     // Convert each field to bytes
     let raster_dim_size_bytes = params.raster_dim_size.to_ne_bytes();
     let height_min_bytes = params.height_min.to_ne_bytes();
@@ -157,42 +224,38 @@ pub async fn run_compute_shader(
     uniform_bytes.extend_from_slice(&height_min_bytes);
     uniform_bytes.extend_from_slice(&height_max_bytes);
 
-    
     let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Raster Parameters"),
         contents: &uniform_bytes,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
-
     // Read the shader file at runtime
 
     let entry_point = "main_cs";
     //let compiled_shader_modules = maybe_watch();
     //let module = compiled_shader_modules.spv_module_for_entry_point(entry_point);
-    
+
     // Read the SPIR-V file
     let path = "/Users/rowan/Projects-Code/qmlib/target/spirv-builder/spirv-unknown-vulkan1.1/release/deps/qmlib_compute_shader.spv";
 
+    let mut file = File::open(path).expect("Failed to open SPIR-V file");
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .expect("Failed to read SPIR-V file");
 
+    // Convert bytes to Vec<u32>
+    let spirv: Vec<u32> = bytemuck::cast_slice(&bytes).to_vec();
 
-     let mut file = File::open(path).expect("Failed to open SPIR-V file");
-     let mut bytes = Vec::new();
-     file.read_to_end(&mut bytes).expect("Failed to read SPIR-V file");
- 
-     // Convert bytes to Vec<u32>
-     let spirv: Vec<u32> = bytemuck::cast_slice(&bytes).to_vec();
- 
-    let label ="Shader Module";
+    let label = "Shader Module";
     //let wgpu::ShaderModuleDescriptorSpirV { label, source } = module;
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
         source: wgpu::ShaderSource::SpirV(spirv.into()),
     });
 
-
-      // bind group
-      let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    // bind group
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
         entries: &[
             wgpu::BindGroupLayoutEntry {
@@ -277,8 +340,6 @@ pub async fn run_compute_shader(
         entry_point: &entry_point,
     });
 
- 
-
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Command Encoder"),
     });
@@ -287,7 +348,10 @@ pub async fn run_compute_shader(
     let num_triangles = indices.len() as u32;
     let workgroup_size = 8 * 8; // 64 threads per workgroup
     let num_workgroups = (num_triangles + workgroup_size - 1) / workgroup_size;
-    println!("num_triangles: {}, workgroup_size: {}, num_workgroups:{}", num_triangles, workgroup_size, num_workgroups);
+    println!(
+        "num_triangles: {}, workgroup_size: {}, num_workgroups:{}",
+        num_triangles, workgroup_size, num_workgroups
+    );
 
     // Set up the compute pass
     // Scope to ensure compute pass is dropped before the buffer is mapped
@@ -308,7 +372,6 @@ pub async fn run_compute_shader(
     );
 
     queue.submit(Some(encoder.finish()));
-    
 
     // init data vec here
     let buffer_slice = readback_buffer.slice(..);
@@ -332,7 +395,6 @@ pub async fn run_compute_shader(
     result
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,24 +407,24 @@ mod tests {
             height_max: 100.,
         };
         let vertices = vec![
-           UVec3::new(0, 0, 0),
-           UVec3::new(0, 63, 0),
-           UVec3::new(63, 63, 32767),
-           UVec3::new(63, 0, 32767),
-       ]; 
+            UVec3::new(0, 0, 0),
+            UVec3::new(0, 63, 0),
+            UVec3::new(63, 63, 32767),
+            UVec3::new(63, 0, 32767),
+        ];
 
-       let indices = vec![
-           [0, 1, 2],
-           [0, 2, 3],
-       ];
+        let indices = vec![[0, 1, 2], [0, 2, 3]];
 
         let result = run_compute_shader(&vertices, &indices, &params).await;
 
         // Add assertions to verify the result
-        assert_eq!(result.len(), (params.raster_dim_size * params.raster_dim_size) as usize);
+        assert_eq!(
+            result.len(),
+            (params.raster_dim_size * params.raster_dim_size) as usize
+        );
         let mut rows: Vec<Vec<f32>> = Vec::with_capacity(params.raster_dim_size as usize);
 
-        for chunk in result.chunks(params.raster_dim_size  as usize) {
+        for chunk in result.chunks(params.raster_dim_size as usize) {
             rows.push(chunk.to_vec());
         }
 

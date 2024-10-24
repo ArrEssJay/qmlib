@@ -1,23 +1,21 @@
 #![cfg_attr(target_arch = "spirv", no_std)]
-
+mod bvh;
 use bvh::{AABB, BVH};
 use spirv_std::{
     glam::{IVec2, UVec2, UVec3, Vec2, Vec3, Vec3Swizzles},
     spirv,
 };
 
-#[allow(unused_imports)]
+#[allow(unused_imports)] // Spir-v compiler will complain if we don't
 use spirv_std::num_traits::Float;
-
-mod bvh;
 
 pub struct RasterParameters {
     raster_dim_size: u32,
     height_min: f32,
     height_max: f32,
 }
-#[allow(dead_code)]
-// Used in tests
+
+#[allow(dead_code)] // Used in tests
 impl RasterParameters {
     fn new(raster_dim_size: u32, height_min: f32, height_max: f32) -> Self {
         Self {
@@ -46,18 +44,6 @@ pub fn main_cs(
     if global_index < indices.len() as u32 {
         rasterise_triangle(params, vertices, indices, storage, global_index as usize);
     }
-}
-
-#[allow(unused_variables)]
-pub fn rasterise_hello(
-    params: &RasterParameters,
-    vertices: &[UVec3],
-    indices: &[[u32; 3]],
-    storage: &mut [f32],
-    index: usize,
-) {
-    // Simplified logic: set a specific index in the storage buffer to a non-zero value
-    storage[index] = index as f32;
 }
 
 // Build a raster using a scanline approach over each triangle's bounding box
