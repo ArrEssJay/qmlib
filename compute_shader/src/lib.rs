@@ -5,7 +5,7 @@ use spirv_std::{
     glam::{IVec2, UVec2, UVec3, UVec4, Vec2, Vec3, Vec3Swizzles},
     spirv,
 };
-use tile::{AABBValues, RasterParameters, AABB, GRID_CELL_SIZE};
+use tile::{flat_raster_pixel_index, AABBValues, RasterParameters, AABB, GRID_CELL_SIZE};
 
 #[allow(unused_imports)] // Spir-v compiler will complain if we don't
 use spirv_std::num_traits::Float;
@@ -14,11 +14,8 @@ use spirv_std::num_traits::Float;
 #[cfg(not(target_arch = "spirv"))]
 use tile::assign_grid_cell_bounding_boxes;
 
-// Workgroup size is 8x8x1 (x,y,z)
-// For now we are computing the bvh on the CPU and passing it to the shader
-// Ideally we want to compute the bvh on the GPU as well, but that's for another day
-// Workgroup size is 8x8x1 (x,y,z)
-#[spirv(compute(threads(8, 8, 1)))]
+
+#[spirv(compute(threads(1, 1, 1)))]
 pub fn main_cs(
     #[spirv(global_invocation_id)] global_id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] params: &RasterParameters,
@@ -344,13 +341,78 @@ mod tests {
         };
     }
 
-
-
     generate_plane_triangle_rasteriser_tests!(8, 16, 32, 64, 128, 256, 512, 1024);
     //generate_plane_triangle_rasteriser_tests!(2048, 4096, 8192, 16384, 32768); // large
     generate_plane_raster_block_scanline_tests!(8, 16, 32, 64, 128, 256, 512, 1024);
     //generate_plane_raster_block_scanline_tests!(2048, 4096, 8192, 16384, 32768); //large
 
+    // Did the rasteriser output something?
+    #[test]
+    fn test_rasteriser() {
+        let params = RasterParameters {
+            raster_dim_size: 64,
+            height_min: 0.,
+            height_max: 100.,
+        };
+        let vertices = vec![
+            UVec3::new(0, 0, 0),
+            UVec3::new(0, 63, 0),
+            UVec3::new(63, 63, 32767),
+            UVec3::new(63, 0, 32767),
+        ];
+
+        let indices = vec![[0, 1, 2], [0, 2, 3]];
+        let mut storage_cells =
+            vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
+
+        dispatch_rasterise_cells(&params, &vertices, &indices, &mut storage_cells);
+
+        let mut rows: Vec<Vec<f32>> = Vec::with_capacity(params.raster_dim_size as usize);
+
+        for chunk in storage_cells.chunks(params.raster_dim_size as usize) {
+            rows.push(chunk.to_vec());
+        }
+
+        for row in rows {
+            println!("{:?}", row);
+        }
+    }
+
+    // Both methods should produce an -identical- raster
+    #[test]
+    fn test_raster_methods_consistency() {
+        let params = RasterParameters {
+            raster_dim_size: 1024,
+            height_min: 0.,
+            height_max: 100.,
+        };
+        let vertices = vec![
+            UVec3::new(0, 0, 0),
+            UVec3::new(0, 1023, 0),
+            UVec3::new(1023, 1023, 32767),
+            UVec3::new(1023, 0, 32767),
+        ];
+
+        let indices = vec![[0, 1, 2], [0, 2, 3]];
+
+        let mut storage_triangles =
+            vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
+        let mut storage_cells =
+            vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
+
+        // Build raster using triangle scanning method
+        dispatch_rasterise_triangles(&params, &vertices, &indices, &mut storage_triangles);
+
+        // Build raster using block scanning method
+        dispatch_rasterise_cells(&params, &vertices, &indices, &mut storage_cells);
+
+        // Compare the outputs
+        assert_abs_diff_eq!(
+            storage_triangles.as_slice(),
+            storage_cells.as_slice(),
+            epsilon = 1e-4
+        );
+    }
 
     #[test]
     fn test_is_cw() {
@@ -663,40 +725,5 @@ mod tests {
 
         let result = triangle_face_height_interpolator(p, v, &params);
         assert!(result.is_none());
-    }
-
-    // Both methods should produce an -identical- raster
-    #[test]
-    fn test_raster_methods_consistency() {
-        let params = RasterParameters {
-            raster_dim_size: 1024,
-            height_min: 0.,
-            height_max: 100.,
-        };
-        let vertices = vec![
-            UVec3::new(0, 0, 0),
-            UVec3::new(0, 1023, 0),
-            UVec3::new(1023, 1023, 32767),
-            UVec3::new(1023, 0, 32767),
-        ];
-
-        let indices = vec![[0, 1, 2], [0, 2, 3]];
-
-        let mut storage_triangle =
-            vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
-        let mut storage_bvh = vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
-
-        // Build raster using triangle scanning method
-        dispatch_rasterise_triangles(&params, &vertices, &indices, &mut storage_triangle);
-
-        // Build raster using block scanning method
-        dispatch_rasterise_cells(&params, &vertices, &indices, &mut storage_bvh);
-
-        // Compare the outputs
-        assert_abs_diff_eq!(
-            storage_triangle.as_slice(),
-            storage_bvh.as_slice(),
-            epsilon = 1e-4
-        );
     }
 }

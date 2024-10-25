@@ -108,12 +108,15 @@ pub fn calculate_triangle_aabb(vertices: &[UVec3], indices: &[u32; 3]) -> UVec4 
 
 //    }
 
-
-#[allow(dead_code)] // Used in tests
-pub fn flat_cell_index(cell: UVec2, params: &RasterParameters) -> usize {
+#[allow(dead_code)]
+pub fn flat_grid_cell_index(cell: UVec2, params: &RasterParameters) -> usize {
     (cell.y * (params.raster_dim_size / GRID_CELL_SIZE) + cell.x) as usize
 }
 
+#[allow(dead_code)]
+pub fn flat_raster_pixel_index(pixel: UVec2, params: &RasterParameters) -> usize {
+    (pixel.y * (params.raster_dim_size) + pixel.x) as usize
+}
 
 
 #[cfg(not(target_arch = "spirv"))]
@@ -178,7 +181,7 @@ mod tests {
     fn test_flat_cell_index() {
         let params = RasterParameters::new(16, 0.0, 1.0);
         let cell = UVec2::new(1, 1);
-        let index = flat_cell_index(cell, &params);
+        let index = flat_grid_cell_index(cell, &params);
         assert_eq!(index, 3);
     }
 
