@@ -1,5 +1,5 @@
 
-use glam::{UVec3};
+use glam::UVec3;
 use crate::quantized_mesh_tile;
 
 use quantized_mesh_tile::QuantizedMeshTile;
@@ -31,7 +31,7 @@ pub fn rasterise(
     .collect();
 
     let params = RasterParameters {
-        raster_dim_size: 64,
+        raster_dim_size: raster_dim_size,
         height_min: qmt.quantized_mesh.header.min_height,
         height_max:  qmt.quantized_mesh.header.max_height,
     };

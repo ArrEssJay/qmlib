@@ -2370,6 +2370,7 @@ name = "qmlib_compute_shader"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "paste",
  "spirv-std",
 ]
 

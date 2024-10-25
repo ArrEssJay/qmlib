@@ -201,7 +201,7 @@ pub async fn run_compute_shader(
     let output_raster_size_bytes = (params.raster_dim_size as u64 * params.raster_dim_size as u64)
         * std::mem::size_of::<f32>() as u64;
 
-        
+
     // Convert UVec3 to bytes
     //let vertex_bytes: Vec<u8> = cast_slice(&vertices).to_vec();
     let vertex_bytes: Vec<u8> = vertices
@@ -245,26 +245,36 @@ pub async fn run_compute_shader(
                 .collect::<Vec<_>>()
         })
         .collect();
-
+    
+    // Binding 0
     let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Raster Parameters"),
         contents: params_bytes.as_slice(),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
-
+    // Binding 1
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),
         contents: vertex_bytes.as_slice(),
         usage: wgpu::BufferUsages::STORAGE,
     });
-
+    
+    // Binding 2
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Index Buffer"),
         contents: index_bytes.as_slice(),
         usage: wgpu::BufferUsages::STORAGE,
     });
 
+    // Binding 3
+    let bounding_boxes_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Bounding Boxes Buffer"),
+        contents: bounding_boxes_bytes.as_slice(),
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+
+    // Binding 4
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Storage Buffer"),
         size: output_raster_size_bytes,
@@ -272,23 +282,18 @@ pub async fn run_compute_shader(
         mapped_at_creation: false,
     });
 
-    // Not bound to any bind group
+    // Not bound
     let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Readback Buffer"),
         size: output_raster_size_bytes,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-
-    let bounding_boxes_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Bounding Boxes Buffer"),
-        contents: bounding_boxes_bytes.as_slice(),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
+   
 
     // Read the shader file at runtime
     let entry_point = "main_cs";
-    let path = "/Users/rowan/Projects-Code/qmlib/target/spirv-builder/spirv-unknown-vulkan1.1/release/deps/qmlib_compute_shader.spv";
+    let path = "/Users/rowan/Projects-Code/qmlib/target/spirv-builder/spirv-unknown-spv1.3/release/deps/qmlib_compute_shader.spv";
 
     let mut file = File::open(path).expect("Failed to open SPIR-V file");
     let mut bytes = Vec::new();
