@@ -41,7 +41,7 @@ pub fn main_cs(
 // Build a raster using a scanline approach over each triangle's bounding box
 // Only needed on host
 #[cfg(not(target_arch = "spirv"))]
-pub fn build_raster_triangle_scanline(
+pub fn dispatch_rasterise_triangles(
     params: &RasterParameters,
     vertices: &[UVec3],
     indices: &[[u32; 3]],
@@ -58,7 +58,7 @@ pub fn build_raster_triangle_scanline(
 // intersection tests
 // Only needed on host
 #[cfg(not(target_arch = "spirv"))]
-pub fn build_raster_block_scanline(
+pub fn dispatch_rasterise_cells(
     params: &RasterParameters,
     vertices: &[UVec3],
     indices: &[[u32; 3]],
@@ -89,11 +89,11 @@ fn rasterise_cell(
     cell_index: UVec2,
 ) {
     // Calculate the base raster index for the cell
-    let raster_index = cell_index * GRID_CELL_SIZE;
+    let base_raster_index = cell_index * GRID_CELL_SIZE;
 
-    for y in (raster_index.y..raster_index.y + GRID_CELL_SIZE).rev() {
-        for x in raster_index.x..raster_index.x + GRID_CELL_SIZE {
-            let pixel = UVec2::new(x, y);
+    for y in (base_raster_index.y..base_raster_index.y + GRID_CELL_SIZE).rev() {
+        for x in base_raster_index.x..base_raster_index.x + GRID_CELL_SIZE {
+            // let pixel = UVec2::new(x, y);
 
             // Iterate over the bounding boxes and check for intersection
             for i in 0..bounding_boxes.len() {
@@ -331,7 +331,7 @@ mod tests {
     macro_rules! generate_plane_raster_block_scanline_tests {
         ($($dim:expr),*) => {
             $(
-                generate_plane_raster_test!(build_raster_block_scanline, test_raster_block_scanline, $dim);
+                generate_plane_raster_test!(dispatch_rasterise_cells, test_rasterise_cells, $dim);
             )*
         };
     }
@@ -339,7 +339,7 @@ mod tests {
     macro_rules! generate_plane_triangle_rasteriser_tests {
         ($($dim:expr),*) => {
             $(
-                generate_plane_raster_test!(build_raster_triangle_scanline, test_raster_triangle_scanline, $dim);
+                generate_plane_raster_test!(dispatch_rasterise_triangles, test_rasterise_triangles, $dim);
             )*
         };
     }
@@ -687,10 +687,10 @@ mod tests {
         let mut storage_bvh = vec![-1.; (params.raster_dim_size * params.raster_dim_size) as usize];
 
         // Build raster using triangle scanning method
-        build_raster_triangle_scanline(&params, &vertices, &indices, &mut storage_triangle);
+        dispatch_rasterise_triangles(&params, &vertices, &indices, &mut storage_triangle);
 
         // Build raster using block scanning method
-        build_raster_block_scanline(&params, &vertices, &indices, &mut storage_bvh);
+        dispatch_rasterise_cells(&params, &vertices, &indices, &mut storage_bvh);
 
         // Compare the outputs
         assert_abs_diff_eq!(
