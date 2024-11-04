@@ -693,13 +693,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "compute_shader_shared"
-version = "0.1.0"
-dependencies = [
- "zerocopy 0.8.8",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
