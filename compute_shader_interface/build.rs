@@ -16,8 +16,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let profile = env::var("PROFILE").expect("PROFILE is not set");
 
     // Set environment variables for spirv_builder
-    env::set_var("OUT_DIR", &out_dir);
-    env::set_var("PROFILE", &profile);
+    env::set_var("OUT_DIR", out_dir);
+    env::set_var("PROFILE", profile);
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=CARGO_CFG_TARGET_OS");

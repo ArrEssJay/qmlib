@@ -334,7 +334,7 @@ fn intersects_cell(cell_aabb: &AABB, cell: UVec2) -> bool {
 
 // Is v2 inside the edge formed by v0 and v1
 pub fn edge_function(v: [IVec2; 3]) -> i32 {
-    ((v[2].x - v[0].x) * (v[1].y - v[0].y) - (v[2].y - v[0].y) * (v[1].x - v[0].x)) as i32
+    (v[2].x - v[0].x) * (v[1].y - v[0].y) - (v[2].y - v[0].y) * (v[1].x - v[0].x)
 }
 
 // Calculate the edge weights for a point p
@@ -380,7 +380,7 @@ pub fn point_in_triangle(v: [UVec3; 3], p: UVec2) -> bool {
     // Calculate edge weights
     let w = calculate_edge_weights(v_xy, p.as_ivec2(), is_cw);
 
-    return w[0] >= 0 && w[1] >= 0 && w[2] >= 0;
+    w[0] >= 0 && w[1] >= 0 && w[2] >= 0
 }
 
 // Calculate the barycentric weights for a point p
