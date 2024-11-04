@@ -56,7 +56,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "version_check",
- "zerocopy",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
@@ -658,14 +658,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "compute_shader"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "paste",
+ "spirv-std",
+ "zerocopy 0.8.8",
+]
+
+[[package]]
 name = "compute_shader_interface"
 version = "0.1.0"
 dependencies = [
+ "approx",
  "async-std",
  "bytemuck",
  "clap",
+ "compute_shader",
  "futures",
  "glam",
+ "paste",
  "rustc_codegen_spirv",
  "rustc_codegen_spirv-types",
  "spirv-builder",
@@ -676,6 +689,14 @@ dependencies = [
  "strum",
  "strum_macros",
  "wgpu",
+ "zerocopy 0.8.8",
+]
+
+[[package]]
+name = "compute_shader_shared"
+version = "0.1.0"
+dependencies = [
+ "zerocopy 0.8.8",
 ]
 
 [[package]]
@@ -2339,6 +2360,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "binrw",
+ "compute_shader",
  "compute_shader_interface",
  "criterion",
  "glam",
@@ -2363,15 +2385,6 @@ dependencies = [
  "qmlib",
  "wgpu",
  "winit",
-]
-
-[[package]]
-name = "qmlib_compute_shader"
-version = "0.1.0"
-dependencies = [
- "approx",
- "paste",
- "spirv-std",
 ]
 
 [[package]]
@@ -3853,7 +3866,16 @@ version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
 dependencies = [
- "zerocopy-derive",
+ "zerocopy-derive 0.7.35",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a4e33e6dce36f2adba29746927f8e848ba70989fdb61c772773bbdda8b5d6a7"
+dependencies = [
+ "zerocopy-derive 0.8.8",
 ]
 
 [[package]]
@@ -3861,6 +3883,17 @@ name = "zerocopy-derive"
 version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.79",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cd137b4cc21bde6ecce3bbbb3350130872cda0be2c6888874279ea76e17d4c1"
 dependencies = [
  "proc-macro2",
  "quote",

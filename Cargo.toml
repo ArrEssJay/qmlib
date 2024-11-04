@@ -5,6 +5,7 @@ members = [
     "lib",
     "compute_shader_interface",
     "compute_shader",
+    "compute_shader_shared" 
 ]
 
 [profile.release]

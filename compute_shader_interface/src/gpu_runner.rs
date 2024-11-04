@@ -1,55 +1,37 @@
+use glam::UVec4;
 use std::fs::File;
 use std::io::Read;
-
-use spirv_std::glam::UVec3;
-
 use wgpu::util::DeviceExt;
 use wgpu::{Adapter, Features};
-use glam::UVec4;
+use zerocopy::{Immutable, IntoBytes};
 
-pub const GRID_CELL_SIZE: u32 = 8;
+use crate::VertexArrays;
+use compute_shader::RasterParameters;
+pub const GRID_CELL_SIZE_U32: u32 = 8;
 
+// This replicates the glam UVec4 type
+// This is simply for simplicty and clarity
+// of serializing/deserializing
 #[repr(C)]
-#[derive(Debug,Copy, Clone)]
-pub struct RasterParameters {
-    pub raster_dim_size: u32,
-    pub height_min: f32,
-    pub height_max: f32,
+#[derive(IntoBytes, Immutable)]
+pub struct BufferUVec4 {
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+    pub w: u32,
 }
 
-// Only needed on host
-// This doesn't really belong here but it avoids having to deal with
-// importing from the shader crate
-#[cfg(not(target_arch = "spirv"))]
-pub fn assign_grid_cell_bounding_boxes(
-    vertices: &[UVec3],
-    indices: &[[u32; 3]], // vertex indices
-) -> Vec<UVec4> {
- 
-    let mut bounding_boxes: Vec<UVec4> = Vec::new();
-
-    for triangle_indices in indices.iter() {
-        let aabb:UVec4 = calculate_triangle_aabb(vertices, triangle_indices);
-        bounding_boxes.push(aabb);
+impl BufferUVec4 {
+    // Custom method to convert from glam::UVec4
+    pub fn from_uvec4(vec: UVec4) -> Self {
+        BufferUVec4 {
+            x: vec.x,
+            y: vec.y,
+            z: vec.z,
+            w: vec.w,
+        }
     }
-
-    bounding_boxes
 }
-pub fn calculate_triangle_aabb(vertices: &[UVec3], indices: &[u32; 3]) -> UVec4 {
-    let v0 = vertices[indices[0] as usize];
-    let v1 = vertices[indices[1] as usize];
-    let v2 = vertices[indices[2] as usize];
-
-    use core::cmp::{max, min};
-
-    let min_x = min(min(v0.x, v1.x), v2.x);
-    let min_y = min(min(v0.y, v1.y), v2.y);
-    let max_x = max(max(v0.x, v1.x), v2.x);
-    let max_y = max(max(v0.y, v1.y), v2.y);
-
-    UVec4::new(min_x, min_y, max_x, max_y)
-}
-
 
 fn print_gpu_capabilities(adapter: &Adapter) {
     // Print adapter properties
@@ -162,12 +144,10 @@ fn print_gpu_capabilities(adapter: &Adapter) {
     );
 }
 
-
-
 pub async fn run_compute_shader(
-    vertices: &[UVec3],
-    indices: &[[u32; 3]],
+    v: VertexArrays<'_>,
     params: &RasterParameters,
+    bounding_boxes: &Vec<UVec4>,
 ) -> Vec<f32> {
     // device
     let backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
@@ -197,84 +177,62 @@ pub async fn run_compute_shader(
     drop(instance);
     drop(adapter);
 
-    // Data to be processed
+    // Raster buffer
     let output_raster_size_bytes = (params.raster_dim_size as u64 * params.raster_dim_size as u64)
         * std::mem::size_of::<f32>() as u64;
 
-
-    // Convert UVec3 to bytes
-    //let vertex_bytes: Vec<u8> = cast_slice(&vertices).to_vec();
-    let vertex_bytes: Vec<u8> = vertices
+    // bounding boxes for triangles
+    // cast to an identical struct that implements IntoBytes
+    let aabb_serialisable = bounding_boxes
         .iter()
-        .flat_map(|v| {
-            v.to_array()
-                .iter()
-                .flat_map(|&x| x.to_ne_bytes())
-                .collect::<Vec<_>>()
-        })
-        .collect();
+        .map(|&a| BufferUVec4::from_uvec4(a))
+        .collect::<Vec<_>>();
 
-        let index_bytes: Vec<u8> = indices
-        .iter()
-        .flat_map(|v| {
-                v.iter()
-                .flat_map(|&x| x.to_ne_bytes())
-                .collect::<Vec<_>>()
-        })
-        .collect();
+    // Input Data Buffers
+    let params_bytes = params.as_bytes();
+    let u_bytes = v.u.as_bytes();
+    let v_bytes = v.v.as_bytes();
+    let h_bytes = v.h.as_bytes();
+    let indices_bytes = v.i.as_bytes();
+    let aabb_bytes = aabb_serialisable.as_bytes();
 
-        
-    // Convert each field to bytes
-    let raster_dim_size_bytes = params.raster_dim_size.to_ne_bytes();
-    let height_min_bytes = params.height_min.to_ne_bytes();
-    let height_max_bytes = params.height_max.to_ne_bytes();
-
-    // Concatenate the byte arrays
-    let mut params_bytes = Vec::new();
-    params_bytes.extend_from_slice(&raster_dim_size_bytes);
-    params_bytes.extend_from_slice(&height_min_bytes);
-    params_bytes.extend_from_slice(&height_max_bytes);
-
-    let bounding_boxes = assign_grid_cell_bounding_boxes(vertices, indices);
-    let bounding_boxes_bytes: Vec<u8> = bounding_boxes
-        .iter()
-        .flat_map(|v| {
-            v.to_array()
-                .iter()
-                .flat_map(|&x| x.to_ne_bytes())
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    
-    // Binding 0
+    // Create buffers
     let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Raster Parameters"),
-        contents: params_bytes.as_slice(),
+        label: Some("Params Buffer"),
+        contents: params_bytes,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
-    // Binding 1
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: vertex_bytes.as_slice(),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
-    
-    // Binding 2
-    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: index_bytes.as_slice(),
-        usage: wgpu::BufferUsages::STORAGE,
+    let u_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("U Buffer"),
+        contents: u_bytes,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     });
 
-    // Binding 3
-    let bounding_boxes_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Bounding Boxes Buffer"),
-        contents: bounding_boxes_bytes.as_slice(),
-        usage: wgpu::BufferUsages::STORAGE,
+    let v_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("V Buffer"),
+        contents: v_bytes,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     });
 
-    // Binding 4
+    let h_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("H Buffer"),
+        contents: h_bytes,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let indices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Indices Buffer"),
+        contents: indices_bytes,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let aabb_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("AABB Buffer"),
+        contents: aabb_bytes,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    });
+
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Storage Buffer"),
         size: output_raster_size_bytes,
@@ -282,14 +240,13 @@ pub async fn run_compute_shader(
         mapped_at_creation: false,
     });
 
-    // Not bound
+    // not bound to any bind group
     let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Readback Buffer"),
         size: output_raster_size_bytes,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-   
 
     // Read the shader file at runtime
     let entry_point = "main_cs";
@@ -313,62 +270,73 @@ pub async fn run_compute_shader(
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
         entries: &[
-            //params
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
-                    ty: wgpu::BufferBindingType::Uniform,
                 },
                 count: None,
             },
-
-            //vertices
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
-                    ty: wgpu::BufferBindingType::Storage { read_only: true }, // Set read_only to true
                 },
                 count: None,
             },
-
-            //indices
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
-                    ty: wgpu::BufferBindingType::Storage { read_only: true }, // Set read_only to true
                 },
                 count: None,
             },
-
-            //bounding_boxes
             wgpu::BindGroupLayoutEntry {
                 binding: 3,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
-                    ty: wgpu::BufferBindingType::Storage { read_only: true }, // Set read_only to true
                 },
                 count: None,
             },
-
-            //storage
             wgpu::BindGroupLayoutEntry {
                 binding: 4,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 6,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
                 },
                 count: None,
             },
@@ -384,18 +352,26 @@ pub async fn run_compute_shader(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: vertex_buffer.as_entire_binding(),
+                resource: u_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: index_buffer.as_entire_binding(),
+                resource: v_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
-                resource: bounding_boxes_buffer.as_entire_binding(),
+                resource: h_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 4,
+                resource: indices_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: aabb_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
                 resource: storage_buffer.as_entire_binding(),
             },
         ],
@@ -423,11 +399,9 @@ pub async fn run_compute_shader(
     });
 
     // Calculate the number of workgroups needed - symmetric about x and y
-    let num_workgroups_x_y = params.raster_dim_size / GRID_CELL_SIZE;
+    let num_workgroups_x_y = params.raster_dim_size / GRID_CELL_SIZE_U32;
 
-    println!(
-        "num_workgroups_x_y: {}", num_workgroups_x_y,
-    );
+    println!("num_workgroups_x_y: {}", num_workgroups_x_y,);
 
     // Set up the compute pass
     // Scope to ensure compute pass is dropped before the buffer is mapped
@@ -469,42 +443,4 @@ pub async fn run_compute_shader(
     readback_buffer.unmap();
 
     result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[async_std::test]
-    async fn test_run_compute_shader() {
-        let params = RasterParameters {
-            raster_dim_size: 64,
-            height_min: 0.,
-            height_max: 100.,
-        };
-        let vertices = vec![
-            UVec3::new(0, 0, 0),
-            UVec3::new(0, 63, 0),
-            UVec3::new(63, 63, 32767),
-            UVec3::new(63, 0, 32767),
-        ];
-
-        let indices = vec![[0, 1, 2], [0, 2, 3]];
-
-        let result = run_compute_shader(&vertices, &indices, &params).await;
-
-        assert_eq!(
-            result.len(),
-            (params.raster_dim_size * params.raster_dim_size) as usize
-        );
-        let mut rows: Vec<Vec<f32>> = Vec::with_capacity(params.raster_dim_size as usize);
-
-        for chunk in result.chunks(params.raster_dim_size as usize) {
-            rows.push(chunk.to_vec());
-        }
-
-        for row in rows {
-            println!("{:?}", row);
-        }
-    }
 }

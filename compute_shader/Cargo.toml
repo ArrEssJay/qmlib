@@ -1,5 +1,5 @@
 [package]
-name = "qmlib_compute_shader"
+name = "compute_shader"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,6 +9,7 @@ crate-type = ["dylib"]
 
 [dependencies]
 spirv-std = { path = "../../rust-gpu/crates/spirv-std", version = "=0.9.0", features = ["bytemuck"] }
+zerocopy = { version = "0.8.8", features = ["derive"] }
 
 [dev-dependencies]
 approx = "0.5.1"

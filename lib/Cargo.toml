@@ -15,6 +15,8 @@ num-traits = "0.2.19"
 rayon = "1.10.0"
 tiff = "0.9.1"    
 compute_shader_interface = { path = "../compute_shader_interface" }  # Local path to the library
+compute_shader= { path = "../compute_shader" }  # Local path to the library
+
 async-std = "1.13.0"
 
 [lib]

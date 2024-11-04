@@ -5,20 +5,68 @@ use tiff::{
 };
 
 use crate::{
-    interpolator::InterpolationMethod,
     quantized_mesh_tile::{QuantizedMeshTile, CRS},
-    raster::{raster_dim_pixels, rasterise},
+    UV_SIZE_U16,
 };
+
+use compute_shader::RasterParameters;
+use compute_shader_interface::VertexArrays;
+use compute_shader_interface::{rasterise, Rasteriser};
 
 pub fn write_tiff(
     qmt: &QuantizedMeshTile,
     filename: &Path,
     scale_shift: u16,
-    method: InterpolationMethod,
 ) -> Result<(), Box<dyn Error>> {
-    let raster_size = raster_dim_pixels(scale_shift);
+    let u = &qmt
+        .quantized_mesh
+        .vertex_data
+        .u
+        .iter()
+        .map(|&x| x as u32)
+        .collect::<Vec<u32>>();
+    let v = &qmt
+        .quantized_mesh
+        .vertex_data
+        .v
+        .iter()
+        .map(|&x| x as u32)
+        .collect::<Vec<u32>>();
+    let h = &qmt
+        .quantized_mesh
+        .vertex_data
+        .height
+        .iter()
+        .map(|&x| x as u32)
+        .collect::<Vec<u32>>();
+    let i = &qmt
+        .quantized_mesh
+        .vertex_data
+        .triangle_index
+        .iter()
+        .flatten()
+        .map(|&x| x)
+        .collect::<Vec<u32>>();
 
-    let raster = rasterise(qmt, scale_shift, &method);
+    let vertex_arrays = VertexArrays {
+        u: &u,
+        v: &v,
+        h: &h,
+        i: &i,
+    };
+
+    let raster_size = UV_SIZE_U16 as u32 >> scale_shift;
+    let params = RasterParameters::new(
+        raster_size,
+        qmt.quantized_mesh.header.min_height,
+        qmt.quantized_mesh.header.max_height,
+        qmt.quantized_mesh.vertex_data.vertex_count as u32,
+        qmt.quantized_mesh.vertex_data.triangle_count as u32,
+    );
+
+    println!("Raster Parameters: {:?}", params);
+
+    let raster = rasterise(vertex_arrays, &params, Rasteriser::GPU);
     let mut tiff: TiffEncoder<File> = TiffEncoder::new(File::create(filename)?)?;
     let mut image = tiff
         .new_image::<Gray32Float>(raster_size.into(), raster_size.into())
@@ -138,24 +186,31 @@ pub fn write_tiff(
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{
-        interpolator::{self},
-        test_utils::test_data::qmt_test_chess,
-        tiff_writer::write_tiff,
-    };
+    use crate::quantized_mesh_tile::load_quantized_mesh_tile;
+    use crate::{test_utils::test_data::qmt_test_north, tiff_writer::write_tiff};
 
     #[test]
     fn test_write_tiff() {
-        let mesh = qmt_test_chess();
+        let mesh = qmt_test_north();
         let path: PathBuf = PathBuf::from("./test.tiff");
 
-        let scale_shift: u16 = 8; // Example scale_shift for rasterisation
-        let result = write_tiff(
-            &mesh,
-            &path,
-            scale_shift,
-            interpolator::InterpolationMethod::Edge,
-        );
+        let scale_shift: u16 = 5; // Example scale_shift for rasterisation
+        let result = write_tiff(&mesh, &path, scale_shift);
+
+        assert!(result.is_ok(), "TIFF generation failed: {result:?}");
+    }
+
+    #[test]
+
+    fn test_write_tiff_terrain() {
+        let path = PathBuf::from(format!(
+            "{}/../test/terrain_data/a/15/59489/9692.terrain",
+            env!("CARGO_MANIFEST_DIR")
+        ));
+        let mesh = load_quantized_mesh_tile(&path).unwrap();
+
+        let scale_shift: u16 = 5; // Example scale_shift for rasterisation
+        let result = write_tiff(&mesh, &path, scale_shift);
 
         assert!(result.is_ok(), "TIFF generation failed: {result:?}");
     }
