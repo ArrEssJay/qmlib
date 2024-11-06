@@ -2,9 +2,7 @@
 resolver = "2"
 members = [
     "app",
-    "lib",
-    "compute_shader_interface",
-    "compute_shader",
+    "lib"
 ]
 
 [profile.release]

@@ -214,16 +214,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-attributes"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -310,7 +300,6 @@ version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c634475f29802fde2b8f0b505b1bd00dfe4df7d4a000f0b36f7671197d5c3615"
 dependencies = [
- "async-attributes",
  "async-channel 1.9.0",
  "async-global-executor",
  "async-io",
@@ -661,8 +650,6 @@ dependencies = [
 name = "compute_shader"
 version = "0.1.0"
 dependencies = [
- "approx",
- "paste",
  "spirv-std",
  "zerocopy 0.8.8",
 ]
@@ -671,14 +658,12 @@ dependencies = [
 name = "compute_shader_interface"
 version = "0.1.0"
 dependencies = [
- "approx",
  "async-std",
  "bytemuck",
  "clap",
  "compute_shader",
  "futures",
  "glam",
- "paste",
  "rustc_codegen_spirv",
  "rustc_codegen_spirv-types",
  "spirv-builder",
@@ -2870,9 +2855,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcb3b0832881834994b7ec82b709ec5491043ceb4bf8101e27da6b5234b24261"
 dependencies = [
- "memchr",
  "spirv-tools-sys",
- "tempfile",
 ]
 
 [[package]]
@@ -2947,19 +2930,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "tempfile"
-version = "3.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0f2c9fc62d0beef6951ccffd757e241266a2c833136efbe35af6cd2567dca5b"
-dependencies = [
- "cfg-if",
- "fastrand",
- "once_cell",
- "rustix",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
