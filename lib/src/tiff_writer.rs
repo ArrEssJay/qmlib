@@ -44,15 +44,14 @@ pub fn write_tiff(
         .vertex_data
         .triangle_index
         .iter()
-        .flatten()
-        .map(|&x| x)
+        .flatten().copied()
         .collect::<Vec<u32>>();
 
     let vertex_arrays = VertexArrays {
-        u: &u,
-        v: &v,
-        h: &h,
-        i: &i,
+         u,
+         v,
+         h,
+         i,
     };
 
     let raster_size = UV_SIZE_U16 as u32 >> scale_shift;
@@ -60,8 +59,8 @@ pub fn write_tiff(
         raster_size,
         qmt.quantized_mesh.header.min_height,
         qmt.quantized_mesh.header.max_height,
-        qmt.quantized_mesh.vertex_data.vertex_count as u32,
-        qmt.quantized_mesh.vertex_data.triangle_count as u32,
+        qmt.quantized_mesh.vertex_data.vertex_count,
+        qmt.quantized_mesh.vertex_data.triangle_count,
     );
 
     println!("Raster Parameters: {:?}", params);
@@ -69,7 +68,7 @@ pub fn write_tiff(
     let raster = rasterise(vertex_arrays, &params, Rasteriser::GPU);
     let mut tiff: TiffEncoder<File> = TiffEncoder::new(File::create(filename)?)?;
     let mut image = tiff
-        .new_image::<Gray32Float>(raster_size.into(), raster_size.into())
+        .new_image::<Gray32Float>(raster_size, raster_size)
         .unwrap();
 
     // TODO - Handle Projected Web Mercator
@@ -166,7 +165,7 @@ pub fn write_tiff(
         .unwrap();
 
     // Ensure we have the correct dimensions for the raster
-    let expected_size = u32::from(raster_size) * u32::from(raster_size);
+    let expected_size = raster_size * raster_size;
     if u32::try_from(raster.len()) != Ok(expected_size) {
         return Err(format!(
             "Raster size does not match expected dimensions: expected {}, found {}",
