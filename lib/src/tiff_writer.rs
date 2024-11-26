@@ -10,7 +10,7 @@ use crate::{
 };
 
 use compute_shader::RasterParameters;
-use compute_shader_interface::VertexArrays;
+use compute_shader_interface::VertexBuffers;
 use compute_shader_interface::{rasterise, Rasteriser};
 
 pub fn write_tiff(
@@ -47,11 +47,11 @@ pub fn write_tiff(
         .flatten().copied()
         .collect::<Vec<u32>>();
 
-    let vertex_arrays = VertexArrays {
+    let vertex_buffers = VertexBuffers {
          u,
          v,
-         h,
-         i,
+         attribute: h,
+         indices: i,
     };
 
     let raster_size = UV_SIZE_U16 as u32 >> scale_shift;
@@ -59,13 +59,14 @@ pub fn write_tiff(
         raster_size,
         qmt.quantized_mesh.header.min_height,
         qmt.quantized_mesh.header.max_height,
+        32767, // max height in quantised mesh
         qmt.quantized_mesh.vertex_data.vertex_count,
         qmt.quantized_mesh.vertex_data.triangle_count,
     );
 
     println!("Raster Parameters: {:?}", params);
 
-    let raster = rasterise(vertex_arrays, &params, Rasteriser::GPU);
+    let raster = rasterise(vertex_buffers, &params, Rasteriser::GPU);
     let mut tiff: TiffEncoder<File> = TiffEncoder::new(File::create(filename)?)?;
     let mut image = tiff
         .new_image::<Gray32Float>(raster_size, raster_size)

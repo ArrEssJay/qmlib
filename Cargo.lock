@@ -469,6 +469,7 @@ dependencies = [
  "compute_shader",
  "futures",
  "glam",
+ "rayon",
  "rustc_codegen_spirv",
  "rustc_codegen_spirv-types",
  "spirv-builder",
