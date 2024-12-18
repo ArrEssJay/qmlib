@@ -11,12 +11,14 @@ use crate::{
 
 use compute_shader::RasterParameters;
 use compute_shader_interface::VertexBuffers;
-use compute_shader_interface::{rasterise, Rasteriser};
+use compute_shader_interface::rasterise;
+pub use compute_shader_interface::Rasteriser; // re-export Rasteriser for a unified interface
 
 pub fn write_tiff(
     qmt: &QuantizedMeshTile,
     filename: &Path,
     scale_shift: u16,
+    rasteriser: Rasteriser
 ) -> Result<(), Box<dyn Error>> {
     let u = &qmt
         .quantized_mesh
@@ -66,7 +68,7 @@ pub fn write_tiff(
 
     println!("Raster Parameters: {:?}", params);
 
-    let raster = rasterise(vertex_buffers, &params, Rasteriser::GPU);
+    let raster = rasterise(vertex_buffers, &params, rasteriser);
     let mut tiff: TiffEncoder<File> = TiffEncoder::new(File::create(filename)?)?;
     let mut image = tiff
         .new_image::<Gray32Float>(raster_size, raster_size)
@@ -186,6 +188,8 @@ pub fn write_tiff(
 mod tests {
     use std::path::PathBuf;
 
+    use compute_shader_interface::Rasteriser;
+
     use crate::quantized_mesh_tile::load_quantized_mesh_tile;
     use crate::{test_utils::test_data::qmt_test_north, tiff_writer::write_tiff};
 
@@ -195,7 +199,7 @@ mod tests {
         let path: PathBuf = PathBuf::from("./test.tiff");
 
         let scale_shift: u16 = 5; // Example scale_shift for rasterisation
-        let result = write_tiff(&mesh, &path, scale_shift);
+        let result = write_tiff(&mesh, &path, scale_shift, Rasteriser::CPU);
 
         assert!(result.is_ok(), "TIFF generation failed: {result:?}");
     }
@@ -210,7 +214,7 @@ mod tests {
         let mesh = load_quantized_mesh_tile(&path).unwrap();
 
         let scale_shift: u16 = 5; // Example scale_shift for rasterisation
-        let result = write_tiff(&mesh, &path, scale_shift);
+        let result = write_tiff(&mesh, &path, scale_shift, Rasteriser::CPU);
 
         assert!(result.is_ok(), "TIFF generation failed: {result:?}");
     }

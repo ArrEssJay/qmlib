@@ -10,6 +10,8 @@ pub mod svg_writer;
 pub mod quantized_mesh_tile;
 pub mod tiff_writer;
 pub mod csv_writer;
+pub mod twodm_writer;
+
 
 pub mod geometry;
 pub mod raster;

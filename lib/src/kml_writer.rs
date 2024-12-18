@@ -36,8 +36,8 @@ pub fn write_kml(qmt: &QuantizedMeshTile, file_path: &Path) -> io::Result<()> {
             // Convert each point to KML coordinates (lon, lat, alt)
             kml_data.push_str(&format!(
                 "{},{},{}\n",
-                point.lon(),
-                point.lat(),
+                point.lon().to_degrees(),
+                point.lat().to_degrees(),
                 point.height()
             ));
         }
@@ -52,8 +52,8 @@ pub fn write_kml(qmt: &QuantizedMeshTile, file_path: &Path) -> io::Result<()> {
         kml_data.push_str(r#"<Point><coordinates>"#);
         kml_data.push_str(&format!(
             "{},{},{}\n",
-            vertex.lon(),
-            vertex.lat(),
+            vertex.lon().to_degrees(),
+            vertex.lat().to_degrees(),
             vertex.height()
         ));
         kml_data.push_str(r#"</coordinates></Point></Placemark>"#);

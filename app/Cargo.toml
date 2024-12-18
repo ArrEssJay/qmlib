@@ -12,6 +12,7 @@ qmlib = { path = "../lib" }  # Local path to the library
 binrw = "0.14.0"
 nalgebra = "0.33.0"
 geo = "0.28.0"
+clap = "4.5.23"
 
 [features]
 
@@ -24,14 +25,6 @@ name = "tiles_at_point"
 path = "src/tiles_at_point.rs"
 
 [[bin]]
-name = "export_kml"
-path = "src/export_kml.rs"
-
-[[bin]]
-name = "export_svg"
-path = "src/export_svg.rs"
-
-[[bin]]
 name = "export_geotiff"
 path = "src/export_geotiff.rs"
 
@@ -39,10 +32,6 @@ path = "src/export_geotiff.rs"
 name = "export_csv"
 path = "src/export_csv.rs"
 
-#[[bin]]
-#name = "compute_shader"
-#path = "src/compute_shader.rs"
-
-#[[bin]]
-#name = "render_tile"
-#path = "src/render_tile.rs"
+[[bin]]
+name = "export_vec"
+path = "src/export_vec.rs"
