@@ -1,6 +1,7 @@
 // This module is only included during tests
 #[cfg(test)]
 pub mod test_data {
+
     use crate::geometry::{Ellipsoid, GeodeticPoint2};
     use crate::quantized_mesh_tile::{QuantizedMeshTile, TilingScheme, CRS};
     use crate::{geometry::CartesianPoint3, BoundingSphere, QuantizedMeshHeader};
@@ -75,14 +76,16 @@ pub mod test_data {
         }
     }
 
-    fn vd_test_chessboard_mesh(grid_size: u32, high_value: u16) -> VertexData {
+    fn vd_test_chessboard_mesh() -> VertexData {
         let mut u = Vec::new();
         let mut v = Vec::new();
         let mut height = Vec::new();
         let mut triangle_index = Vec::new();
 
+        let grid_size = 8;
+        let high_value = 32767;
         // Step 1: Create grid points for u, v, and height
-        let step = 32767 / grid_size as u16; // Normalizing UV coordinates to 32767
+        let step = 32768 / grid_size as u16; // Normalizing UV coordinates to 32767
         for i in 0..=grid_size {
             for j in 0..=grid_size {
                 u.push(i as u16 * step);
@@ -133,6 +136,71 @@ pub mod test_data {
         }
     }
 
+
+    pub fn vd_test_dimpled_mesh() -> VertexData {
+        let grid_size = 8;
+        let mut u: Vec<u16> = Vec::new();
+        let mut v: Vec<u16> = Vec::new();
+        let mut height = Vec::new();
+        let mut triangle_index: Vec<[u32; 3]> = Vec::new();
+    
+        for y in 0_u16..grid_size {
+            for x in 0_u16..grid_size {
+                let base_index = ((y * grid_size + x) * 5) as u32;
+    
+                // Corner vertices
+                u.push(x * 32767 / (grid_size - 1));
+                v.push(y * 32767 / (grid_size - 1));
+                height.push(16384);
+    
+                u.push((x + 1) * 32767 / (grid_size - 1));
+                v.push(y * 32767 / (grid_size - 1));
+                height.push(16384);
+    
+                u.push((x + 1) * 32767 / (grid_size - 1));
+                v.push((y + 1) * 32767 / (grid_size - 1));
+                height.push(16384);
+    
+                u.push(x * 32767 / (grid_size - 1));
+                v.push((y + 1) * 32767 / (grid_size - 1));
+                height.push(16384);
+    
+                // Center vertex
+                u.push((x * 32767 / (grid_size - 1) + (x + 1) * 32767 / (grid_size - 1)) / 2);
+                v.push((y * 32767 / (grid_size - 1) + (y + 1) * 32767 / (grid_size - 1)) / 2);
+                height.push(if (x + y) % 2 == 0 { 32767 } else { 0 });
+    
+                // Triangles
+                triangle_index.push([base_index, base_index + 1, base_index + 4]);
+                triangle_index.push([base_index + 1, base_index + 2, base_index + 4]);
+                triangle_index.push([base_index + 2, base_index + 3, base_index + 4]);
+                triangle_index.push([base_index + 3, base_index, base_index + 4]);
+            }
+        }
+    
+        let vertex_count = u.len() as u32;
+        let triangle_count = triangle_index.len() as u32;
+    
+        VertexData {
+            vertex_count,
+            u,
+            v,
+            height,
+            triangle_count,
+            triangle_index,
+            edge_indices: EdgeIndices {
+                west_vertex_count: 0,
+                west_indices: vec![],
+                south_vertex_count: 0,
+                south_indices: vec![],
+                east_vertex_count: 0,
+                east_indices: vec![],
+                north_vertex_count: 0,
+                north_indices: vec![],
+            }, // Edge indices can be added if needed
+        }
+    }
+
     pub fn qm_header_test_1() -> QuantizedMeshHeader {
         QuantizedMeshHeader {
             center: CartesianPoint3::new(0.0, 0.0, 0.0),
@@ -157,7 +225,15 @@ pub mod test_data {
     pub fn qm_test_chessboard_mesh() -> QuantizedMesh {
         QuantizedMesh {
             header: qm_header_test_1(),
-            vertex_data: vd_test_chessboard_mesh(32u32, 16384u16),
+            vertex_data: vd_test_chessboard_mesh(),
+            extensions: vec![],
+        }
+    }
+
+    pub fn qm_test_dimpled_mesh() -> QuantizedMesh {
+        QuantizedMesh {
+            header: qm_header_test_1(),
+            vertex_data: vd_test_dimpled_mesh(),
             extensions: vec![],
         }
     }
@@ -181,6 +257,21 @@ pub mod test_data {
     pub fn qmt_test_chess() -> QuantizedMeshTile {
         let mut qmt = QuantizedMeshTile::new(
             qm_test_chessboard_mesh(),
+            15,
+            59489,
+            9692,
+            Ellipsoid::wgs84(),
+            TilingScheme::Tms,
+            CRS::Epsg4326,
+        );
+        qmt.bounding_rectangle.upper_right = GeodeticPoint2::from_degrees(1.0, 1.0);
+        qmt.bounding_rectangle.lower_left = GeodeticPoint2::from_degrees(-1.0, -1.0);
+        qmt
+    }
+
+    pub fn qmt_test_dimple() -> QuantizedMeshTile {
+        let mut qmt = QuantizedMeshTile::new(
+            qm_test_dimpled_mesh(),
             15,
             59489,
             9692,

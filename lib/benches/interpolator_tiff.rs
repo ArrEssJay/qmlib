@@ -9,14 +9,14 @@ fn benchmark(c: &mut Criterion) {
 
     // Now a whole mesh
 
-    let scale_shift: u16 = 4;
+    let raster_scale_factor: u16 = 4;
     let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path).unwrap();
 
     c.bench_function("rasterise_barycentric", |b| {
         b.iter(|| {
             rasterise(
                 &tile,
-                scale_shift,
+                raster_scale_factor,
                 &InterpolationMethod::Barycentric,
             )
         })
@@ -26,7 +26,7 @@ fn benchmark(c: &mut Criterion) {
         b.iter(|| {
             rasterise(
                 &tile,
-                scale_shift,
+                raster_scale_factor,
                 &InterpolationMethod::Edge,
             )
         })

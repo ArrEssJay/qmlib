@@ -13,7 +13,7 @@ fn main() -> Result<(), String> {
                 .index(1),
         )
         .arg(
-            Arg::new("scale_shift")
+            Arg::new("raster_scale_factor")
                 .help("Scale shift value as an integer")
                 .required(true)
                 .index(2),
@@ -32,12 +32,12 @@ fn main() -> Result<(), String> {
         .expect("Input path is required")
         .into();
 
-    // Parse the scale_shift argument
-    let scale_shift: u16 = matches
-        .get_one::<String>("scale_shift")
+    // Parse the raster_scale_factor argument
+    let raster_scale_factor: u32 = matches
+        .get_one::<String>("raster_scale_factor")
         .expect("Scale shift is required")
         .parse()
-        .map_err(|_| "Invalid scale_shift value")?;
+        .map_err(|_| "Invalid raster_scale_factor value")?;
 
     // Determine the rasteriser to use
     let rasteriser = match matches
@@ -59,7 +59,7 @@ fn main() -> Result<(), String> {
     let mut outpath = input_path.clone();
     outpath.set_extension("tiff");
 
-    tiff_writer::write_tiff(&tile, &outpath, scale_shift, rasteriser)
+    tiff_writer::write_tiff(&tile, &outpath, raster_scale_factor, rasteriser)
         .map_err(|e| format!("Error exporting to GeoTIFF: {}", e))?;
 
     Ok(())
@@ -78,11 +78,11 @@ mod tests {
             "{}/../test/terrain_data/a/15/59489/9692.terrain",
             env!("CARGO_MANIFEST_DIR")
         ));
-        let scale_shift: u16 = 4;
+        let raster_scale_factor: u32 = 4;
         let tile = quantized_mesh_tile::load_quantized_mesh_tile(&path).unwrap();
         path.set_extension(".test.tiff");
         let result =
-            tiff_writer::write_tiff(&tile, &path, scale_shift, tiff_writer::Rasteriser::CPU);
+            tiff_writer::write_tiff(&tile, &path, raster_scale_factor, tiff_writer::Rasteriser::CPU);
         assert!(result.is_ok(), "Failed to write TIFF: {:?}", result.err());
 
         // Clean up test output

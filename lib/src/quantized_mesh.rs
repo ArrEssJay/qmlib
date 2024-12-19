@@ -20,8 +20,14 @@ pub mod interpolator;
 pub mod test_utils;
 
 // Constants
-pub static UV_SIZE_U16:u16 = 32768;
-pub static UV_SIZE_F64:f64 = 32768.0;
+pub static UV_SIZE_U16:u16 = 32768_u16;
+pub static UV_SIZE_U32:u32 = 32768_u32;
+
+pub static UV_MAX_U16:u16 = UV_SIZE_U16 -1;
+pub static UV_MAX_U32:u32 = UV_SIZE_U32 -1;
+
+pub static UV_SIZE_F64:f64 = 32768.0_f64;
+
 
 // Types
 pub type TriangleVertexIndex = [u32; 3];

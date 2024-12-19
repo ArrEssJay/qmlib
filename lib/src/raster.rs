@@ -6,17 +6,17 @@ use rayon::prelude::*;
 use crate::{geometry::Triangle, interpolator::{interpolate_height, InterpolationMethod}, quantized_mesh_tile::QuantizedMeshTile, UV_SIZE_U16};
 
 
-pub fn raster_dim_pixels(scale_shift: u16) -> u16 {
-    UV_SIZE_U16 >> scale_shift
+pub fn raster_dim_pixels(raster_scale_factor: u16) -> u16 {
+    UV_SIZE_U16 >> raster_scale_factor
 }
 
 pub fn rasterise(
     qmt: &QuantizedMeshTile,
-    scale_shift: u16,
+    raster_scale_factor: u16,
     method: &InterpolationMethod,
 ) -> Vec<f32>
 {       
-    let raster_dim_size:u16 =  raster_dim_pixels(scale_shift);
+    let raster_dim_size:u16 =  raster_dim_pixels(raster_scale_factor);
     let raster_size: u32 = raster_dim_size as u32 * raster_dim_size as u32 ;
     let v = &qmt.quantized_mesh.vertex_data;
     let heights = &qmt.quantized_mesh.interpolated_height_vertices();
@@ -34,8 +34,8 @@ pub fn rasterise(
     v.triangle_index.par_iter().for_each(|triangle_vertices| {
         
         let vertex_at = |i: usize| Point2::new(
-            v.u[triangle_vertices[i] as usize ] >> scale_shift,
-            v.v[triangle_vertices[i] as usize ] >> scale_shift,
+            v.u[triangle_vertices[i] as usize ] >> raster_scale_factor,
+            v.v[triangle_vertices[i] as usize ] >> raster_scale_factor,
         );
 
         let triangle = Triangle {   

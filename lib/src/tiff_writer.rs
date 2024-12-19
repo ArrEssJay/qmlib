@@ -4,10 +4,7 @@ use tiff::{
     tags::Tag,
 };
 
-use crate::{
-    quantized_mesh_tile::{QuantizedMeshTile, CRS},
-    UV_SIZE_U16,
-};
+use crate::quantized_mesh_tile::{QuantizedMeshTile, CRS};
 
 use compute_shader::RasterParameters;
 use compute_shader_interface::VertexBuffers;
@@ -17,7 +14,7 @@ pub use compute_shader_interface::Rasteriser; // re-export Rasteriser for a unif
 pub fn write_tiff(
     qmt: &QuantizedMeshTile,
     filename: &Path,
-    scale_shift: u16,
+    raster_scale_factor: u32,
     rasteriser: Rasteriser
 ) -> Result<(), Box<dyn Error>> {
     let u = &qmt
@@ -34,14 +31,14 @@ pub fn write_tiff(
         .iter()
         .map(|&x| x as u32)
         .collect::<Vec<u32>>();
-    let h = &qmt
+    let attribute = &qmt
         .quantized_mesh
         .vertex_data
         .height
         .iter()
         .map(|&x| x as u32)
         .collect::<Vec<u32>>();
-    let i = &qmt
+    let indices = &qmt
         .quantized_mesh
         .vertex_data
         .triangle_index
@@ -49,24 +46,29 @@ pub fn write_tiff(
         .flatten().copied()
         .collect::<Vec<u32>>();
 
-    let vertex_buffers = VertexBuffers {
+
+
+    let vertex_buffers =  VertexBuffers {
          u,
          v,
-         attribute: h,
-         indices: i,
+         attribute,
+         indices,
     };
 
-    let raster_size = UV_SIZE_U16 as u32 >> scale_shift;
     let params = RasterParameters::new(
-        raster_size,
+        raster_scale_factor,
+        32767,
         qmt.quantized_mesh.header.min_height,
         qmt.quantized_mesh.header.max_height,
         32767, // max height in quantised mesh
         qmt.quantized_mesh.vertex_data.vertex_count,
         qmt.quantized_mesh.vertex_data.triangle_count,
     );
+    let raster_size = params.scaled_raster_size();
+
 
     println!("Raster Parameters: {:?}", params);
+    println!("Raster Scaled Size: {:?}x{:?}", raster_size, raster_size);
 
     let raster = rasterise(vertex_buffers, &params, rasteriser);
     let mut tiff: TiffEncoder<File> = TiffEncoder::new(File::create(filename)?)?;
@@ -191,18 +193,22 @@ mod tests {
     use compute_shader_interface::Rasteriser;
 
     use crate::quantized_mesh_tile::load_quantized_mesh_tile;
-    use crate::{test_utils::test_data::qmt_test_north, tiff_writer::write_tiff};
-
+    use crate::{test_utils::test_data::qmt_test_chess, tiff_writer::write_tiff};
+    use crate::twodm_writer::write_2dm;
     #[test]
     fn test_write_tiff() {
-        let mesh = qmt_test_north();
-        let path: PathBuf = PathBuf::from("./test.tiff");
+        let mesh = qmt_test_chess();
 
-        let scale_shift: u16 = 5; // Example scale_shift for rasterisation
-        let result = write_tiff(&mesh, &path, scale_shift, Rasteriser::CPU);
+        let raster_scale_factor: u32 = 5; // Example raster_scale_factor for rasterisation
+        let result = write_tiff(&mesh, &PathBuf::from("./test_cpu.tiff"), raster_scale_factor, Rasteriser::CPU);
+        assert!(result.is_ok(), "CPU TIFF generation failed: {result:?}");
 
-        assert!(result.is_ok(), "TIFF generation failed: {result:?}");
-    }
+        let result = write_tiff(&mesh, &PathBuf::from("./test_gpu.tiff"), raster_scale_factor, Rasteriser::GPU);
+        assert!(result.is_ok(), "GPU TIFF generation failed: {result:?}");
+
+        let result = write_2dm(&mesh, &PathBuf::from("./test.2dm"));
+        assert!(result.is_ok(), "2dm generation failed: {result:?}");
+    } 
 
     #[test]
 
@@ -213,8 +219,8 @@ mod tests {
         ));
         let mesh = load_quantized_mesh_tile(&path).unwrap();
 
-        let scale_shift: u16 = 5; // Example scale_shift for rasterisation
-        let result = write_tiff(&mesh, &path, scale_shift, Rasteriser::CPU);
+        let raster_scale_factor: u32 = 5; // Example raster_scale_factor for rasterisation
+        let result = write_tiff(&mesh, &path, raster_scale_factor, Rasteriser::CPU);
 
         assert!(result.is_ok(), "TIFF generation failed: {result:?}");
     }
