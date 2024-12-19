@@ -130,16 +130,16 @@ pub fn write_tiff(
         0.0,      //LL UV x
         0.0,      //LL UV y
         0.0,      //LL UV z
-        *min_lat, // LL world x
-        *max_lon, // LL world y
+        *min_lon, // LL world x
+        *max_lat, // LL world y
         0.0,      // LL world z
     ];
 
     // Define ModelPixelScale (assuming square pixels)
     let height = max_lat - min_lat;
     let width = max_lon - min_lon;
-    let pixel_size_x = height / f64::from(raster_size); // Calculate pixel size in X
-    let pixel_size_y = width / f64::from(raster_size); // Calculate pixel size in Y
+    let pixel_size_x = width / f64::from(raster_size); // Calculate pixel size in X
+    let pixel_size_y = height / f64::from(raster_size); // Calculate pixel size in Y
     let pixel_scale = [pixel_size_x, pixel_size_y, 1.0]; // Set Z pixel size to 1 as Z values require no scaling
 
     #[cfg(debug_assertions)]
